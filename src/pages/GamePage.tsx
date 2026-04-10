@@ -1,43 +1,33 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toPng } from "html-to-image";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Menu, ScrollText, Trophy } from "lucide-react";
+import { CalendarDays, LayoutGrid, Menu, ScrollText, Trophy } from "lucide-react";
+import { deleteMatch } from "@/lib/api";
 
 import {
   useAllMatches,
   useConfigs,
   useFactions,
   useMatches,
+  useTableTimeSlots,
   useTables,
 } from "@/hooks/useGameData";
+import { FridayDatePicker } from "@/components/FridayDatePicker";
+import {
+  formatDateSpanish,
+  getCurrentOrNextFriday,
+  isPastDate,
+} from "@/lib/dates";
 import MatchCard from "@/components/MatchCard";
-import { MatchEditorModal } from "@/components/MatchEditorModal";
 import { RegistrationForm } from "@/components/RegistrationForm";
-import { ResultModal } from "@/components/ResultModal";
 import { SiteLoading } from "@/components/SiteLoading";
+import { BoardsHeatmap } from "@/components/BoardsHeatmap";
+import { MatchEditorModal } from "@/components/MatchEditorModal";
+import { ResultModal } from "@/components/ResultModal";
 import { Button } from "@/components/ui/button";
-import { deleteMatch } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import type { ParsedMatch } from "@/types";
-
-function formatDateSpanish(iso: string): string {
-  const months = [
-    "enero",
-    "febrero",
-    "marzo",
-    "abril",
-    "mayo",
-    "junio",
-    "julio",
-    "agosto",
-    "septiembre",
-    "octubre",
-    "noviembre",
-    "diciembre",
-  ];
-  const [year, month, day] = iso.split("-");
-  return `${parseInt(day)} de ${months[parseInt(month) - 1]} de ${year}`;
-}
 
 const proxyImage = (url?: string) => {
   if (!url) return "";
@@ -50,40 +40,76 @@ const proxyImage = (url?: string) => {
 export default function GamePage() {
   const { gameId } = useParams();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { data: configs, isLoading: configsLoading } = useConfigs();
   const { data: matches = [], isLoading: matchesLoading } = useMatches(gameId);
   const { data: factions = [] } = useFactions(gameId);
   const { data: tables = [] } = useTables();
+  const { data: tableTimeSlots = [] } = useTableTimeSlots();
   const { data: allMatches = {} } = useAllMatches(
     configs?.map((config) => config.gameId) || []
   );
 
   const config = configs?.find((item) => item.gameId === gameId);
+  const [tab, setTab] = useState<"agenda" | "registro" | "mesas" | "resultados">(
+    "agenda"
+  );
+  const [selectedDate, setSelectedDate] = useState(getCurrentOrNextFriday);
   const [selectedEditMatch, setSelectedEditMatch] = useState<ParsedMatch | null>(
     null
   );
   const [selectedResultMatch, setSelectedResultMatch] =
     useState<ParsedMatch | null>(null);
-  const [tab, setTab] = useState<"agenda" | "registro" | "resultados">(
-    "agenda"
-  );
+  const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
 
   const upcomingRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  const gameMatchesForSelectedDate = useMemo(
+    () =>
+      matches
+        .filter((match) => !selectedDate || match.date === selectedDate)
+        .sort((a, b) => a.time.localeCompare(b.time)),
+    [matches, selectedDate]
+  );
+
+  const scheduledMatchesForSelectedDate = useMemo(
+    () =>
+      gameMatchesForSelectedDate.filter(
+        (match) => !match.played && match.status !== "completed"
+      ),
+    [gameMatchesForSelectedDate]
+  );
+
+  const resultsForSelectedDate = useMemo(
+    () =>
+      gameMatchesForSelectedDate.filter(
+        (match) => match.played || match.status === "completed"
+      ),
+    [gameMatchesForSelectedDate]
+  );
+
+  const effectiveTimeSlots = useMemo(() => {
+    if (tableTimeSlots.length > 0) {
+      return tableTimeSlots;
+    }
+
+    return Array.from(
+      new Set(
+        matches
+          .map((match) => match.time)
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b))
+      )
+    );
+  }, [matches, tableTimeSlots]);
+
+  const selectedDateIsPast = isPastDate(selectedDate);
 
   const refresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["matches", gameId] });
     queryClient.invalidateQueries({ queryKey: ["allMatches"] });
   }, [gameId, queryClient]);
-
-  const handleDelete = async (match: ParsedMatch) => {
-    if (!gameId) return;
-
-    if (window.confirm("Eliminar partido?")) {
-      await deleteMatch(gameId, match.id);
-      refresh();
-    }
-  };
 
   const download = async (
     ref: { current: HTMLDivElement | null },
@@ -98,6 +124,31 @@ export default function GamePage() {
     link.click();
   };
 
+  const handleDelete = useCallback(
+    async (match: ParsedMatch) => {
+      if (!gameId || !window.confirm("Eliminar partido?")) {
+        return;
+      }
+
+      setBusyMatchId(match.id);
+      const success = await deleteMatch(gameId, match.id);
+      setBusyMatchId(null);
+
+      if (success) {
+        toast({ title: "Partido eliminado" });
+        refresh();
+        return;
+      }
+
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el partido",
+        variant: "destructive",
+      });
+    },
+    [gameId, refresh, toast]
+  );
+
   if (configsLoading || (!config && matchesLoading)) {
     return (
       <SiteLoading message="Si tarda mucho, probablemente algo no este configurado correctamente. Contacta al administrador para solucionarlo." />
@@ -110,14 +161,12 @@ export default function GamePage() {
     );
   }
 
-  const firstValidDate = matches.find((match) => match.date)?.date || "";
-  const upcomingMatches = matches.filter((match) => !match.played);
-  const resultMatches = matches.filter((match) => match.played);
   const gameLogo = proxyImage(config.logo);
   const gameBackground = proxyImage(config.backgroundImage);
   const mobileNavItems = [
     { id: "agenda", label: "Agenda", icon: CalendarDays },
     { id: "registro", label: "Registro", icon: ScrollText },
+    { id: "mesas", label: "Mesas", icon: LayoutGrid },
     { id: "resultados", label: "Resultados", icon: Trophy },
   ] as const;
 
@@ -141,6 +190,21 @@ export default function GamePage() {
           />
 
           <div className="relative flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:gap-4">
+              <div className="flex sm:hidden">
+                <div className="flex shrink-0 items-center gap-2 rounded-full border border-red-500/20 bg-black/30 px-2.5 py-1.5">
+                  <img
+                    src="/images/logoclub.png"
+                    alt="Horda de Plata"
+                    className="h-6 w-6 object-contain"
+                  />
+                  <div className="h-6 w-px bg-white/10" />
+                  <span className="font-heading text-[10px] tracking-[0.18em] text-red-200/85">
+                    HORDA DE PLATA
+                  </span>
+                </div>
+              </div>
+
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-gold/25 bg-black/35 shadow-[0_0_30px_rgba(212,162,67,0.12)] sm:h-20 sm:w-20 sm:rounded-[22px]">
@@ -166,7 +230,7 @@ export default function GamePage() {
                 </div>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2 rounded-full border border-red-500/20 bg-black/30 px-2.5 py-1.5 sm:gap-3 sm:px-3 sm:py-2">
+              <div className="hidden shrink-0 items-center gap-2 rounded-full border border-red-500/20 bg-black/30 px-2.5 py-1.5 sm:flex sm:gap-3 sm:px-3 sm:py-2">
                 <img
                   src="/images/logoclub.png"
                   alt="Horda de Plata"
@@ -178,14 +242,15 @@ export default function GamePage() {
                 </span>
               </div>
             </div>
+            </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={openMobileSidebar}
                 className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-black/20 text-muted-foreground transition-colors hover:text-white md:hidden"
-                aria-label="Abrir menú"
-                title="Abrir menú"
+                aria-label="Abrir menu"
+                title="Abrir menu"
               >
                 <Menu className="h-5 w-5" />
               </button>
@@ -215,19 +280,23 @@ export default function GamePage() {
               </div>
 
               <div className="hidden gap-2 md:flex">
-              {["agenda", "registro", "resultados"].map((item) => (
-                <button
-                  key={item}
-                  onClick={() => setTab(item as typeof tab)}
-                  className={`rounded-full border px-4 py-2 text-sm font-heading tracking-[0.24em] uppercase transition-all ${
-                    tab === item
-                      ? "border-gold/50 bg-gold/15 text-gold-light shadow-[0_10px_30px_rgba(212,162,67,0.08)]"
-                      : "border-white/10 bg-black/20 text-muted-foreground hover:border-red-400/25 hover:text-white"
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
+                {["agenda", "registro", "mesas", "resultados"].map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => setTab(item as typeof tab)}
+                    className={`rounded-full border px-4 py-2 text-sm font-heading tracking-[0.24em] uppercase transition-all ${
+                      tab === item
+                        ? "border-gold/50 bg-gold/15 text-gold-light shadow-[0_10px_30px_rgba(212,162,67,0.08)]"
+                        : "border-white/10 bg-black/20 text-muted-foreground hover:border-red-400/25 hover:text-white"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+
+              <div className="min-w-[180px] flex-1 md:flex-none">
+                <FridayDatePicker value={selectedDate} onChange={setSelectedDate} />
               </div>
             </div>
           </div>
@@ -236,27 +305,36 @@ export default function GamePage() {
         {tab === "agenda" && (
           <section className="flex flex-col gap-4">
             <div className="flex flex-wrap gap-3">
-              <Button onClick={() => download(upcomingRef, "proximos.png")}>
-                Descargar proximos
+              <Button
+                onClick={() =>
+                  download(
+                    upcomingRef,
+                    selectedDate ? `agenda-${selectedDate}.png` : "agenda.png"
+                  )
+                }
+              >
+                Descargar agenda
               </Button>
             </div>
 
             <div className="mx-auto w-full max-w-[450px]">
               <MatchCard
                 ref={upcomingRef}
-                matches={upcomingMatches}
+                matches={scheduledMatchesForSelectedDate}
                 dateLabel={
-                  firstValidDate
-                    ? `Partidos para el viernes ${formatDateSpanish(firstValidDate)}`
+                  selectedDate
+                    ? `Partidos para el viernes ${formatDateSpanish(selectedDate)}`
                     : "Sin fecha cargada"
                 }
                 title="PARTIDOS PROGRAMADOS"
                 logoUrl={config.logo}
                 backgroundUrl={config.backgroundImage}
                 factions={factions}
-                onEdit={setSelectedEditMatch}
-                onResult={setSelectedResultMatch}
-                onDelete={handleDelete}
+                onEdit={(match) => setSelectedEditMatch(match)}
+                onResult={(match) => setSelectedResultMatch(match)}
+                onDelete={(match) =>
+                  busyMatchId === match.id ? undefined : handleDelete(match)
+                }
               />
             </div>
           </section>
@@ -269,16 +347,40 @@ export default function GamePage() {
               config={config}
               factions={factions}
               tables={tables}
+              timeSlots={effectiveTimeSlots}
               allMatches={allMatches}
               onSuccess={refresh}
+              forcedDate={selectedDate}
+              disabled={selectedDateIsPast}
+              disabledMessage="Las reservas y nuevas partidas no se gestionan desde viernes pasados."
             />
           </section>
+        )}
+
+        {tab === "mesas" && (
+          <BoardsHeatmap
+            tables={tables}
+            allMatches={allMatches}
+            configs={configs || []}
+            selectedDate={selectedDate}
+            timeSlots={effectiveTimeSlots}
+            disabled={selectedDateIsPast}
+          />
         )}
 
         {tab === "resultados" && (
           <section className="flex flex-col gap-4">
             <div className="flex flex-wrap gap-3">
-              <Button onClick={() => download(resultsRef, "resultados.png")}>
+              <Button
+                onClick={() =>
+                  download(
+                    resultsRef,
+                    selectedDate
+                      ? `resultados-${selectedDate}.png`
+                      : "resultados.png"
+                  )
+                }
+              >
                 Descargar resultados
               </Button>
             </div>
@@ -286,19 +388,21 @@ export default function GamePage() {
             <div className="mx-auto w-full max-w-[450px]">
               <MatchCard
                 ref={resultsRef}
-                matches={resultMatches}
+                matches={resultsForSelectedDate}
                 dateLabel={
-                  firstValidDate
-                    ? `Resultados del ${formatDateSpanish(firstValidDate)}`
+                  selectedDate
+                    ? `Resultados del ${formatDateSpanish(selectedDate)}`
                     : "Sin fecha cargada"
                 }
                 title="RESULTADOS"
                 logoUrl={config.logo}
                 backgroundUrl={config.backgroundImage}
                 factions={factions}
-                onEdit={setSelectedEditMatch}
-                onResult={setSelectedResultMatch}
-                onDelete={handleDelete}
+                onEdit={(match) => setSelectedEditMatch(match)}
+                onResult={(match) => setSelectedResultMatch(match)}
+                onDelete={(match) =>
+                  busyMatchId === match.id ? undefined : handleDelete(match)
+                }
               />
             </div>
           </section>
@@ -311,6 +415,7 @@ export default function GamePage() {
             config={config}
             factions={factions}
             tables={tables}
+            timeSlots={effectiveTimeSlots}
             allMatches={allMatches}
             onClose={() => setSelectedEditMatch(null)}
             onSuccess={refresh}

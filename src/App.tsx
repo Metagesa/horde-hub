@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { GameSidebar } from "@/components/GameSidebar";
 import Index from "./pages/Index.tsx";
 import GamePage from "./pages/GamePage.tsx";
+import AdminPage from "./pages/AdminPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -21,6 +22,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/game/:gameId" element={<GamePage />} />
+              <Route path="/gestion" element={<AdminPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>

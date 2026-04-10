@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ParsedMatch, GameConfig, GameTable } from "@/types";
 import { saveMatch } from "@/lib/api";
-import { TableSelector } from "./TableSelector";
+import { getCurrentOrNextFriday } from "@/lib/dates";
+import { chooseBestTable } from "@/lib/tableAvailability";
+import type { GameConfig, GameTable, ParsedMatch } from "@/types";
+import { BoardReservationPanel } from "./BoardReservationPanel";
+import { FridayDatePicker } from "./FridayDatePicker";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface RegistrationFormProps {
   gameId: string;
   config: GameConfig;
   tables: GameTable[];
+  timeSlots: string[];
   factions: Array<{ faction: string }>;
   allMatches: Record<string, ParsedMatch[]>;
   onSuccess: () => void;
@@ -15,75 +20,101 @@ interface RegistrationFormProps {
   title?: string;
   submitLabel?: string;
   onCancel?: () => void;
+  forcedDate?: string;
+  disabled?: boolean;
+  disabledMessage?: string;
+  className?: string;
+  stickyActions?: boolean;
 }
 
-function getNextFridays(count: number): string[] {
-  const dates: string[] = [];
-  const today = new Date();
-  const current = new Date(today);
-  const dayOfWeek = current.getDay();
-  const daysUntilFriday = (5 - dayOfWeek + 7) % 7 || 7;
-  current.setDate(current.getDate() + daysUntilFriday);
-
-  for (let i = 0; i < count; i++) {
-    dates.push(current.toISOString().split("T")[0]);
-    current.setDate(current.getDate() + 7);
-  }
-
-  return dates;
-}
-
-const TIME_SLOTS = [
-  "18:00",
-  "18:30",
-  "19:00",
-  "19:30",
-  "20:00",
-  "20:30",
-  "21:00",
-  "21:30",
-  "22:00",
-  "22:30",
-  "23:00",
+const DEFAULT_DURATION_OPTIONS = [
+  "01:00",
+  "01:30",
+  "02:00",
+  "02:30",
+  "03:00",
+  "04:00",
+  "TODO_EL_DIA",
 ];
+
+function getDurationOptions(
+  estimatedDuration: string,
+  initialDuration?: string
+): string[] {
+  return Array.from(
+    new Set(
+      [estimatedDuration, initialDuration, ...DEFAULT_DURATION_OPTIONS].filter(
+        Boolean
+      )
+    )
+  );
+}
+
+function formatDurationLabel(duration: string) {
+  return duration === "TODO_EL_DIA" ? "TODO EL DIA" : duration;
+}
 
 export function RegistrationForm({
   gameId,
   config,
   factions = [],
   tables,
+  timeSlots,
   allMatches,
   onSuccess,
   initialMatch = null,
   title,
   submitLabel,
   onCancel,
+  forcedDate,
+  disabled = false,
+  disabledMessage = "La gestion de reservas no esta disponible para viernes pasados.",
+  className,
+  stickyActions = false,
 }: RegistrationFormProps) {
   const { toast } = useToast();
-  const fridays = useMemo(() => getNextFridays(8), []);
-  const availableDates = useMemo(() => {
-    const extraDate = initialMatch?.date ? [initialMatch.date] : [];
-    return Array.from(new Set([...extraDate, ...fridays].filter(Boolean)));
-  }, [fridays, initialMatch?.date]);
+  const durationOptions = useMemo(
+    () => getDurationOptions(config.estimatedDuration, initialMatch?.duration),
+    [config.estimatedDuration, initialMatch?.duration]
+  );
+  const availableTimeSlots = useMemo(
+    () =>
+      Array.from(new Set([...timeSlots, initialMatch?.time || ""]))
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b)),
+    [initialMatch?.time, timeSlots]
+  );
 
-  const [date, setDate] = useState(initialMatch?.date || fridays[0] || "");
+  const [date, setDate] = useState(
+    forcedDate || initialMatch?.date || getCurrentOrNextFriday()
+  );
   const [playerA, setPlayerA] = useState(initialMatch?.playerA || "");
   const [factionA, setFactionA] = useState(initialMatch?.factionA || "");
   const [playerB, setPlayerB] = useState(initialMatch?.playerB || "");
   const [factionB, setFactionB] = useState(initialMatch?.factionB || "");
   const [time, setTime] = useState(initialMatch?.time || "");
-  const [selectedTable, setSelectedTable] = useState(initialMatch?.tableId || "");
+  const [duration, setDuration] = useState(
+    initialMatch?.duration || config.estimatedDuration || "01:30"
+  );
+  const [reserveTable, setReserveTable] = useState(Boolean(initialMatch?.tableId));
   const [saving, setSaving] = useState(false);
 
+  const matchSize = initialMatch?.matchSize || config.matchSize || "";
+  const reservedTable =
+    date && time && duration && matchSize
+      ? chooseBestTable(tables, allMatches, time, date, matchSize, duration)
+      : null;
+
   useEffect(() => {
-    setDate(initialMatch?.date || fridays[0] || "");
+    setDate(forcedDate || initialMatch?.date || getCurrentOrNextFriday());
     setPlayerA(initialMatch?.playerA || "");
     setFactionA(initialMatch?.factionA || "");
     setPlayerB(initialMatch?.playerB || "");
     setFactionB(initialMatch?.factionB || "");
     setTime(initialMatch?.time || "");
-    setSelectedTable(initialMatch?.tableId || "");
-  }, [fridays, initialMatch]);
+    setDuration(initialMatch?.duration || config.estimatedDuration || "01:30");
+    setReserveTable(Boolean(initialMatch?.tableId));
+  }, [config.estimatedDuration, forcedDate, initialMatch]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,28 +137,22 @@ export function RegistrationForm({
       return;
     }
 
-    if (selectedTable) {
-      for (const matches of Object.values(allMatches)) {
-        for (const m of matches) {
-          if (initialMatch?.id && m.id === initialMatch.id) {
-            continue;
-          }
+    if (!duration) {
+      toast({
+        title: "Error",
+        description: "Duracion es requerida",
+        variant: "destructive",
+      });
+      return;
+    }
 
-          if (
-            m.tableId === selectedTable &&
-            m.time === time &&
-            m.date === date &&
-            !m.played
-          ) {
-            toast({
-              title: "Mesa ocupada",
-              description: `${selectedTable} ya esta ocupada a las ${time} por ${m.playerA} vs ${m.playerB}`,
-              variant: "destructive",
-            });
-            return;
-          }
-        }
-      }
+    if (disabled) {
+      toast({
+        title: "Fecha bloqueada",
+        description: disabledMessage,
+        variant: "destructive",
+      });
+      return;
     }
 
     setSaving(true);
@@ -139,7 +164,13 @@ export function RegistrationForm({
       playerB: playerB.trim().toUpperCase(),
       factionB,
       time,
-      tableId: selectedTable,
+      duration,
+      tableId: reserveTable ? reservedTable?.tableId || "" : "",
+      tableSize: reserveTable ? reservedTable?.size || "" : "",
+      matchSize,
+      reserveTable,
+      playerATime: initialMatch?.playerATime || "",
+      playerBTime: initialMatch?.playerBTime || "",
       scoreA: initialMatch?.scoreA ?? null,
       scoreB: initialMatch?.scoreB ?? null,
       played: initialMatch?.played ?? false,
@@ -149,9 +180,9 @@ export function RegistrationForm({
     if (success) {
       toast({
         title: initialMatch ? "Partido actualizado" : "Partido registrado",
-        description: initialMatch
-          ? "Los cambios se guardaron correctamente"
-          : "El partido se guardo correctamente",
+        description: reserveTable && reservedTable
+          ? `Reserva asignada: ${reservedTable.label}`
+          : "Se guardo sin reserva de tablon",
       });
 
       if (!initialMatch) {
@@ -160,7 +191,7 @@ export function RegistrationForm({
         setFactionA("");
         setFactionB("");
         setTime("");
-        setSelectedTable("");
+        setDuration(config.estimatedDuration || "01:30");
       }
 
       onSuccess();
@@ -181,25 +212,31 @@ export function RegistrationForm({
     "text-xs font-heading uppercase tracking-widest text-muted-foreground mb-1 block";
 
   return (
-    <form onSubmit={handleSubmit} className="glass-surface rounded-[28px] p-4 space-y-4 slide-up sm:p-5">
+    <form
+      onSubmit={handleSubmit}
+      className={cn(
+        "glass-surface rounded-[28px] p-4 space-y-4 slide-up sm:p-5",
+        className
+      )}
+    >
       <h3 className="text-gold font-heading text-sm tracking-widest uppercase">
         {title || (initialMatch ? "EDITAR PARTIDO" : "REGISTRAR PARTIDO")}
       </h3>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {disabled && (
+        <div className="rounded-[22px] border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          {disabledMessage}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className={labelClass}>Fecha (Viernes)</label>
-          <select
+          <FridayDatePicker
             value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className={inputClass}
-          >
-            {availableDates.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
+            onChange={setDate}
+            disabled={Boolean(forcedDate) || disabled}
+          />
         </div>
 
         <div>
@@ -208,14 +245,36 @@ export function RegistrationForm({
             value={time}
             onChange={(e) => setTime(e.target.value)}
             className={inputClass}
+            disabled={disabled}
           >
             <option value="">Seleccionar</option>
-            {TIME_SLOTS.map((slot) => (
+            {availableTimeSlots.map((slot) => (
               <option key={slot} value={slot}>
                 {slot}
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className={labelClass}>Duracion *</label>
+          <select
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+            className={inputClass}
+            disabled={disabled}
+          >
+            {durationOptions.map((option) => (
+              <option key={option} value={option}>
+                {formatDurationLabel(option)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className={labelClass}>Tamaño de partida</label>
+          <input value={matchSize} readOnly className={`${inputClass} opacity-80`} />
         </div>
 
         <div>
@@ -227,6 +286,7 @@ export function RegistrationForm({
             placeholder="Nombre"
             className={inputClass}
             maxLength={50}
+            disabled={disabled}
           />
         </div>
 
@@ -236,6 +296,7 @@ export function RegistrationForm({
             value={factionA}
             onChange={(e) => setFactionA(e.target.value)}
             className={inputClass}
+            disabled={disabled}
           >
             <option value="">Sin faccion</option>
             {factions.map((faction) => (
@@ -255,6 +316,7 @@ export function RegistrationForm({
             placeholder="Nombre (opcional)"
             className={inputClass}
             maxLength={50}
+            disabled={disabled}
           />
         </div>
 
@@ -264,6 +326,7 @@ export function RegistrationForm({
             value={factionB}
             onChange={(e) => setFactionB(e.target.value)}
             className={inputClass}
+            disabled={disabled}
           >
             <option value="">Sin faccion</option>
             {factions.map((faction) => (
@@ -275,24 +338,33 @@ export function RegistrationForm({
         </div>
       </div>
 
-      <TableSelector
+      <BoardReservationPanel
+        matchSize={matchSize}
+        duration={duration}
         tables={tables}
         allMatches={allMatches}
         selectedTime={time}
         selectedDate={date}
-        selectedTable={selectedTable}
-        onSelectTable={setSelectedTable}
+        reserveTable={reserveTable}
+        onReserveTableChange={disabled ? () => undefined : setReserveTable}
       />
 
-      <div className="space-y-2">
+      <div
+        className={cn(
+          "space-y-2",
+          stickyActions &&
+            "sticky bottom-0 -mx-4 border-t border-white/8 bg-[linear-gradient(180deg,rgba(9,12,18,0.12),rgba(9,12,18,0.96)_28%)] px-4 pb-[calc(env(safe-area-inset-bottom,0px)+0.35rem)] pt-3 sm:static sm:m-0 sm:border-0 sm:bg-transparent sm:p-0"
+        )}
+      >
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || disabled}
           className="w-full rounded-2xl py-3 bg-gold text-primary-foreground font-heading uppercase tracking-widest text-sm hover:bg-gold-light transition-colors disabled:opacity-50"
         >
           {saving
             ? "GUARDANDO..."
-            : submitLabel || (initialMatch ? "GUARDAR CAMBIOS" : "REGISTRAR PARTIDO")}
+            : submitLabel ||
+              (initialMatch ? "GUARDAR CAMBIOS" : "REGISTRAR PARTIDO")}
         </button>
 
         {onCancel && (

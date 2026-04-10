@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   fetchConfigs,
   fetchTables,
+  fetchTableTimeSlots,
   fetchMatches,
   fetchAllMatches,
   fetchFactions,
@@ -27,6 +28,9 @@ export function useMatches(gameId?: string) {
     queryKey: ["matches", gameId],
     queryFn: () => fetchMatches(gameId),
     enabled: !!gameId,
+    staleTime: 5_000,
+    refetchInterval: 20_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -38,11 +42,21 @@ export function useTables() {
   });
 }
 
+export function useTableTimeSlots() {
+  return useQuery({
+    queryKey: ["tableTimes"],
+    queryFn: fetchTableTimeSlots,
+    staleTime: 60_000,
+  });
+}
+
 export function useAllMatches(gameIds: string[]) {
   return useQuery({
     queryKey: ["allMatches", ...gameIds],
     queryFn: () => fetchAllMatches(gameIds),
-    staleTime: 30_000,
+    staleTime: 5_000,
+    refetchInterval: 20_000,
+    refetchOnWindowFocus: false,
     enabled: gameIds.length > 0,
   });
 }

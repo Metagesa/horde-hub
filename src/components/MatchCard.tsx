@@ -44,7 +44,7 @@ function FactionBadge({
 
   return (
     <div
-      className="relative w-9 h-9 sm:w-12 sm:h-12 shrink-0"
+      className="relative h-9 w-9 shrink-0 sm:h-12 sm:w-12"
       style={{ clipPath: clip, background: color }}
     >
       <div
@@ -59,17 +59,39 @@ function FactionBadge({
             src={src}
             alt={name}
             crossOrigin="anonymous"
-            className="w-full h-full object-contain p-1.5 sm:p-3 scale-90"
+            className="h-full w-full scale-90 object-contain p-1.5 sm:p-3"
             onError={() => setError(true)}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-xs text-white font-bold">
+          <div className="flex h-full w-full items-center justify-center text-xs font-bold text-white">
             {name ? name.slice(0, 4) : "?"}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+function getWinner(match: ParsedMatch): "A" | "B" | null {
+  if (!match.played || match.scoreA === null || match.scoreB === null) {
+    return null;
+  }
+
+  if (match.scoreA > match.scoreB) {
+    return "A";
+  }
+
+  if (match.scoreB > match.scoreA) {
+    return "B";
+  }
+
+  return null;
+}
+
+function getPlayerClass(isWinner: boolean) {
+  return isWinner
+    ? "text-gold-light drop-shadow-[0_0_10px_rgba(212,162,67,0.35)]"
+    : "text-white";
 }
 
 function MatchRow({
@@ -92,6 +114,7 @@ function MatchRow({
   onToggleMobileActions?: () => void;
 }) {
   const showActions = onEdit || onResult || onDelete;
+  const winner = getWinner(match);
   const rowClassName = `group relative flex items-center w-full bg-black/70 backdrop-blur-md border overflow-hidden transition-colors ${
     isMobileActionsOpen
       ? "border-white/30"
@@ -111,37 +134,52 @@ function MatchRow({
       className={rowClassName}
       onClick={showActions ? onToggleMobileActions : undefined}
     >
-      <div className="flex items-center flex-1 justify-start gap-1.5 sm:gap-2">
+      <div className="flex flex-1 items-center justify-start gap-1.5 sm:gap-2">
         <FactionBadge
           name={match.factionA}
           side="left"
           imagesMap={imagesMap}
           colorsMap={colorsMap}
         />
-        <span className="text-xs sm:text-sm font-black uppercase text-white tracking-wide truncate max-w-[70px] sm:max-w-[90px]">
+        <span
+          className={`max-w-[70px] truncate text-xs font-black uppercase tracking-wide sm:max-w-[90px] sm:text-sm ${getPlayerClass(
+            winner === "A"
+          )}`}
+        >
           {match.playerA}
         </span>
       </div>
 
-      <div className="flex flex-col items-center justify-center px-1 sm:px-2 min-w-[50px] sm:min-w-[60px]">
+      <div className="flex min-w-[68px] flex-col items-center justify-center px-1 sm:min-w-[80px] sm:px-2">
         {match.played ? (
-          <span className="text-red-500 font-black text-xs sm:text-sm tracking-widest whitespace-nowrap">
-            {match.scoreA} - {match.scoreB}
-          </span>
+          <>
+            <span className="whitespace-nowrap text-xs font-black tracking-widest text-red-500 sm:text-sm">
+              {match.scoreA} - {match.scoreB}
+            </span>
+            {(match.playerATime || match.playerBTime) && (
+              <span className="mt-0.5 whitespace-nowrap text-[8px] font-medium text-gray-300 sm:text-[9px]">
+                {match.playerATime || "--:--"} / {match.playerBTime || "--:--"}
+              </span>
+            )}
+          </>
         ) : (
           <>
-            <span className="text-red-500 font-black text-sm sm:text-base tracking-widest">
+            <span className="text-sm font-black tracking-widest text-red-500 sm:text-base">
               VS
             </span>
-            <span className="text-[9px] sm:text-[10px] text-gray-400 font-medium mt-0.5">
+            <span className="mt-0.5 text-[9px] font-medium text-gray-400 sm:text-[10px]">
               {match.time}
             </span>
           </>
         )}
       </div>
 
-      <div className="flex items-center flex-1 justify-end gap-1.5 sm:gap-2">
-        <span className="text-xs sm:text-sm font-black uppercase text-white tracking-wide truncate max-w-[70px] sm:max-w-[90px] text-right">
+      <div className="flex flex-1 items-center justify-end gap-1.5 sm:gap-2">
+        <span
+          className={`max-w-[70px] truncate text-right text-xs font-black uppercase tracking-wide sm:max-w-[90px] sm:text-sm ${getPlayerClass(
+            winner === "B"
+          )}`}
+        >
           {match.playerB || "?"}
         </span>
         <FactionBadge
@@ -196,7 +234,7 @@ function MatchRow({
             )}
           </div>
 
-          <div className="absolute inset-x-0 bottom-0 hidden justify-center gap-2 bg-black/75 px-2 py-2 md:flex md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+          <div className="absolute inset-x-0 bottom-0 hidden justify-center gap-2 bg-black/75 px-2 py-2 transition-opacity md:flex md:opacity-0 md:group-hover:opacity-100">
             {onResult && (
               <button
                 type="button"
@@ -271,10 +309,10 @@ const MatchCard = forwardRef<HTMLDivElement, MatchCardProps>(
     const finalLogo = proxyImage(logoUrl) || "/images/logo.png";
 
     return (
-      <div className="w-full flex justify-center">
+      <div className="flex w-full justify-center">
         <div
           ref={ref}
-          className="relative w-full max-w-[450px] overflow-hidden border border-slate-800 shrink-0"
+          className="relative w-full max-w-[450px] shrink-0 overflow-hidden border border-slate-800"
           style={{
             aspectRatio: "4 / 5",
             backgroundImage: `
@@ -292,19 +330,19 @@ const MatchCard = forwardRef<HTMLDivElement, MatchCardProps>(
             border: "1px solid hsl(220,15%,16%)",
           }}
         >
-          <div className="flex flex-col h-full">
-            <div className="flex items-center gap-2.5 px-4 sm:px-6 pt-5 sm:pt-7 pb-4">
+          <div className="flex h-full flex-col">
+            <div className="flex items-center gap-2.5 px-4 pb-4 pt-5 sm:px-6 sm:pt-7">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg sm:h-16 sm:w-16">
                 <img
                   src={finalLogo}
                   alt="Card Logo"
                   crossOrigin="anonymous"
-                  className="w-full h-full object-contain"
+                  className="h-full w-full object-contain"
                 />
               </div>
               <div className="min-w-0 flex flex-col">
                 <h3
-                  className="text-[11px] sm:text-lg md:text-xl font-black uppercase tracking-[0.14em] whitespace-nowrap"
+                  className="whitespace-nowrap text-[11px] font-black uppercase tracking-[0.14em] sm:text-lg md:text-xl"
                   style={{ color: "hsl(var(--gold-light))" }}
                 >
                   {title || "Partidos Semanales"}
@@ -326,11 +364,11 @@ const MatchCard = forwardRef<HTMLDivElement, MatchCardProps>(
               }}
             />
 
-            <div className="flex-1 flex flex-col justify-center py-2 sm:py-4 gap-2 px-0">
+            <div className="flex flex-1 flex-col justify-center gap-2 px-0 py-2 sm:py-4">
               {matches.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center">
+                <div className="flex flex-1 items-center justify-center">
                   <p
-                    className="text-xs sm:text-base font-semibold uppercase tracking-wider"
+                    className="text-xs font-semibold uppercase tracking-wider sm:text-base"
                     style={{ color: "hsl(215,12%,40%)" }}
                   >
                     Sin partidos registrados

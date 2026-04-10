@@ -2,23 +2,30 @@ export interface Match {
   ID: string | number;
   gameId: string;
   date: string;
-  "playerA": string;
-  "factionA": string;
-  "playerB": string;
-  "factionB": string;
+  playerA: string;
+  factionA: string;
+  playerB: string;
+  factionB: string;
   time: string;
   tableId?: string;
-  "scoreA": string | number;
-  "scoreB": string | number;
+  tableSize?: string;
+  matchSize?: string;
+  duration?: string;
+  playerATime?: string;
+  playerBTime?: string;
+  scoreA: string | number;
+  scoreB: string | number;
   played: boolean | string;
   status: string;
-  "createdAt": string;
+  createdAt: string;
 }
 
 export interface GameConfig {
   gameId: string;
   displayName: string;
   logo: string;
+  matchSize: string;
+  estimatedDuration: string;
   factions: string[];
   factionImages: Record<string, string>;
   factionColors: Record<string, string>;
@@ -27,7 +34,9 @@ export interface GameConfig {
 
 export interface GameTable {
   tableId: string;
-  size: "small" | "medium" | "large";
+  size: string;
+  label: string;
+  columnIndex: number;
   enabled: boolean;
 }
 
@@ -40,6 +49,11 @@ export interface ParsedMatch {
   factionB: string;
   time: string;
   tableId: string;
+  tableSize: string;
+  matchSize: string;
+  duration: string;
+  playerATime: string;
+  playerBTime: string;
   scoreA: number | null;
   scoreB: number | null;
   played: boolean;
