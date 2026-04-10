@@ -126,9 +126,6 @@ export function loadGoogleIdentityScript(): Promise<void> {
   });
 }
 
-console.log("ENV:", import.meta.env)
-console.log("CLIENT:", import.meta.env.VITE_GOOGLE_CLIENT_ID)
-
 export function getStoredAdminSession(): AdminSession | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

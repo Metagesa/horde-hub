@@ -144,13 +144,9 @@ export default function AdminPage() {
             setSession(parsed);
           },
         });
+        window.google.accounts.id.prompt();
 
-        const renderButton = () => {
-          if (cancelled || !googleButtonRef.current || !window.google?.accounts?.id) {
-            return;
-          }
-
-          googleButtonRef.current.innerHTML = "";
+        if (!cancelled && googleButtonRef.current && window.google?.accounts?.id) {
           window.google.accounts.id.renderButton(googleButtonRef.current, {
             theme: "outline",
             size: "large",
@@ -159,28 +155,18 @@ export default function AdminPage() {
             shape: "pill",
           });
 
+          // pequeño delay para verificar que Google dibujó el botón
           window.setTimeout(() => {
-            if (cancelled || !googleButtonRef.current) {
-              return;
-            }
+            if (cancelled || !googleButtonRef.current) return;
 
             if (googleButtonRef.current.childElementCount > 0) {
               setLoginState("ready");
-              return;
+            } else {
+              setLoginState("error");
+              setLoginError("Google cargo, pero no pudo dibujar el boton de acceso.");
             }
-
-            renderAttempts += 1;
-            if (renderAttempts < 6) {
-              renderButton();
-              return;
-            }
-
-            setLoginState("error");
-            setLoginError("Google cargo, pero no pudo dibujar el boton de acceso.");
-          }, 180);
-        };
-
-        renderButton();
+          }, 300);
+        }
       })
       .catch((error: unknown) => {
         const message =
