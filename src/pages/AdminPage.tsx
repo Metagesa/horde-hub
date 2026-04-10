@@ -72,6 +72,12 @@ export default function AdminPage() {
   const [loginNonce, setLoginNonce] = useState(0);
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    if (googleButtonRef.current) {
+      setLoginNonce((v) => v + 1);
+    }
+  }, []);
+
   const clientId = getGoogleClientId();
   const adminEmails = getAdminEmails();
   const selectedEditGameId = selectedEditContext?.gameId;
@@ -88,7 +94,7 @@ export default function AdminPage() {
   }, [session]);
 
   useEffect(() => {
-    if (!clientId || !googleButtonRef.current || session) {
+    if (!clientId || session) {
       return;
     }
 
