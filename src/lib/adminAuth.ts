@@ -124,7 +124,7 @@ export function loadGoogleIdentityScript(): Promise<void> {
     document.head.appendChild(script);
     pollForGoogle();
   });
-}
+}//
 
 export function getStoredAdminSession(): AdminSession | null {
   try {
