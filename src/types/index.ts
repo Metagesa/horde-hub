@@ -1,22 +1,24 @@
 export interface Match {
   ID: string | number;
-  Date: string;
-  "Player A": string;
-  "Faction A": string;
-  "Player B": string;
-  "Faction B": string;
-  Time: string;
-  TableId?: string;
-  "Score A": string | number;
-  "Score B": string | number;
-  Played: boolean | string;
-  Status: string;
-  "Created At": string;
+  gameId: string;
+  date: string;
+  "playerA": string;
+  "factionA": string;
+  "playerB": string;
+  "factionB": string;
+  time: string;
+  tableId?: string;
+  "scoreA": string | number;
+  "scoreB": string | number;
+  played: boolean | string;
+  status: string;
+  "createdAt": string;
 }
 
 export interface GameConfig {
   gameId: string;
   displayName: string;
+  logo: string;
   factions: string[];
   factionImages: Record<string, string>;
   factionColors: Record<string, string>;

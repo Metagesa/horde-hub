@@ -1,17 +1,12 @@
 import { Navigate } from "react-router-dom";
 import { useConfigs } from "@/hooks/useGameData";
+import { SiteLoading } from "@/components/SiteLoading";
 
 export default function Index() {
   const { data: configs, isLoading } = useConfigs();
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-gold font-heading text-lg tracking-widest uppercase animate-pulse">
-          CARGANDO...
-        </p>
-      </div>
-    );
+    return <SiteLoading />;
   }
 
   if (configs && configs.length > 0) {

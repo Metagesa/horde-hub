@@ -16,7 +16,8 @@ const App = () => (
       <BrowserRouter>
         <div className="flex min-h-screen w-full">
           <GameSidebar />
-          <main className="flex-1 min-w-0">
+          <main className="relative min-w-0 flex-1 overflow-hidden">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(212,162,67,0.08),transparent_18%),radial-gradient(circle_at_bottom_left,rgba(173,30,43,0.14),transparent_24%)]" />
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/game/:gameId" element={<GamePage />} />

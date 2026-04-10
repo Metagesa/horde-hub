@@ -22,7 +22,7 @@ export function ResultModal({ match, gameId, onClose, onSuccess }: ResultModalPr
 
     const success = await updateMatchResult(
       gameId,
-      match.id,
+      match,
       Number(scoreA),
       Number(scoreB)
     );

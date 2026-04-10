@@ -15,6 +15,14 @@ export function ExportButton({ targetRef, filename, label }: ExportButtonProps) 
       const dataUrl = await toPng(targetRef.current, {
         pixelRatio: 3,
         backgroundColor: "#000",
+        style: {
+          width: '400px',
+          height: '500px',
+          maxWidth: 'none'
+        },
+        filter: (node) => {
+          return !(node.classList && node.classList.contains('hide-on-export'));
+        }
       });
       const link = document.createElement("a");
       link.download = `${filename}.png`;

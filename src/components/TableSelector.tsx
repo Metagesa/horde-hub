@@ -23,7 +23,7 @@ export function TableSelector({
 
   if (!selectedTime || !selectedDate) {
     return (
-      <div className="glass-surface p-4">
+      <div className="glass-surface rounded-[24px] p-4">
         <h3 className="text-gold font-heading text-sm tracking-widest uppercase mb-2">
           SELECCIONAR MESA
         </h3>
@@ -35,7 +35,7 @@ export function TableSelector({
   }
 
   return (
-    <div className="glass-surface p-4">
+    <div className="glass-surface rounded-[24px] p-4">
       <h3 className="text-gold font-heading text-sm tracking-widest uppercase mb-3">
         SELECCIONAR MESA
       </h3>
@@ -56,7 +56,7 @@ export function TableSelector({
                     key={s.table.tableId}
                     disabled={isOccupied}
                     onClick={() => onSelectTable(s.table.tableId)}
-                    className={`px-3 py-2 text-xs font-heading uppercase tracking-wider transition-all duration-200 border ${
+                    className={`rounded-2xl px-3 py-2 text-xs font-heading uppercase tracking-wider transition-all duration-200 border ${
                       isSelected
                         ? "bg-status-selected text-primary-foreground border-gold animate-pulse-gold"
                         : isOccupied
