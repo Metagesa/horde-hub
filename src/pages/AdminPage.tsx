@@ -376,15 +376,13 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="mt-4 rounded-[22px] border border-amber-500/15 bg-amber-500/10 p-4 text-xs text-amber-100">
+          {/* <div className="mt-4 rounded-[22px] border border-amber-500/15 bg-amber-500/10 p-4 text-xs text-amber-100">
             Si acabas de agregar `VITE_GOOGLE_CLIENT_ID` o `VITE_ADMIN_EMAILS` en
             `.env`, reinicia `npm run dev`.
-          </div>
+          </div> */}
 
           <p className="mt-4 text-xs text-muted-foreground">
-            Este acceso usa login de Google del lado cliente. Sirve como panel
-            oculto y filtro de interfaz, pero no reemplaza una validacion fuerte
-            del lado Apps Script.
+            Este acceso usa login de Google del lado cliente. No es un login real y tus datos no se guardan en ningun lado.
           </p>
         </div>
       </div>
