@@ -1,4 +1,4 @@
-import type { ParsedMatch } from "@/types";
+import type { ParsedMatch } from "../types";
 
 export type RawMatch = {
   id: string | number;

@@ -1,4 +1,4 @@
-import type { GameTable, ParsedMatch } from "@/types";
+import type { GameTable, ParsedMatch } from "../types";
 
 const DEFAULT_DURATION_MINUTES = 30;
 

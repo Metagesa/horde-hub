@@ -1,4 +1,4 @@
-import type { GameConfig, GameTable } from "@/types";
+import type { GameConfig, GameTable } from "../types";
 
 export interface LocalFaction {
   gameId: string;
