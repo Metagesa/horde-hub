@@ -1,6 +1,7 @@
 import { forwardRef, useState } from "react";
 import { Edit2, Trash2, Trophy } from "lucide-react";
 import type { ParsedMatch } from "@/types";
+import { clubLogoUrl, getPublicAssetPath } from "@/lib/assets";
 
 interface MatchCardProps {
   matches: ParsedMatch[];
@@ -14,14 +15,6 @@ interface MatchCardProps {
   onDelete?: (match: ParsedMatch) => void;
 }
 
-const proxyImage = (url?: string) => {
-  if (!url) return "";
-  if (url.startsWith("http")) {
-    return `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
-  }
-  return url;
-};
-
 function FactionBadge({
   name,
   side,
@@ -34,7 +27,7 @@ function FactionBadge({
   colorsMap: Record<string, string>;
 }) {
   const [error, setError] = useState(false);
-  const src = proxyImage(imagesMap[name]);
+  const src = imagesMap[name];
   const color = colorsMap[name] || "#444";
 
   const clip =
@@ -305,8 +298,9 @@ const MatchCard = forwardRef<HTMLDivElement, MatchCardProps>(
       }
     });
 
-    const finalBg = proxyImage(backgroundUrl) || "/images/background.jpg";
-    const finalLogo = proxyImage(logoUrl) || "/images/logo.png";
+    const finalBg =
+      backgroundUrl || getPublicAssetPath("images/games/GuildBall/background.webp");
+    const finalLogo = logoUrl || clubLogoUrl;
 
     return (
       <div className="flex w-full justify-center">

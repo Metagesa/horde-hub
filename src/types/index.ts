@@ -60,3 +60,17 @@ export interface ParsedMatch {
   status: string;
   createdAt: string;
 }
+
+export interface BoardReservationSlotAssignment {
+  time: string;
+  tableId: string;
+  gameId: string;
+  match: ParsedMatch;
+}
+
+export interface BoardAvailabilityState {
+  tables: GameTable[];
+  timeSlots: string[];
+  reservationMatches: Record<string, ParsedMatch[]>;
+  assignmentsByTime: Record<string, BoardReservationSlotAssignment[]>;
+}

@@ -124,7 +124,7 @@ export function loadGoogleIdentityScript(): Promise<void> {
     document.head.appendChild(script);
     pollForGoogle();
   });
-}//
+}
 
 export function getStoredAdminSession(): AdminSession | null {
   try {
@@ -150,4 +150,8 @@ export function storeAdminSession(session: AdminSession) {
 
 export function clearAdminSession() {
   localStorage.removeItem(STORAGE_KEY);
+}
+
+export function getAdminCredential(): string {
+  return getStoredAdminSession()?.credential || "";
 }

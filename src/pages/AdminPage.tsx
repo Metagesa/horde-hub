@@ -21,7 +21,6 @@ import {
 } from "@/hooks/useGameData";
 import { MatchEditorModal } from "@/components/MatchEditorModal";
 import { ResultModal } from "@/components/ResultModal";
-import { SiteLoading } from "@/components/SiteLoading";
 import { useToast } from "@/hooks/use-toast";
 import type { ParsedMatch } from "@/types";
 
@@ -51,11 +50,12 @@ interface MatchContext {
 export default function AdminPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: configs, isLoading: configsLoading } = useConfigs();
+  const { data: configs } = useConfigs();
   const { data: tables = [] } = useTables();
   const { data: tableTimeSlots = [] } = useTableTimeSlots();
   const { data: allMatches = {} } = useAllMatches(
-    configs?.map((config) => config.gameId) || []
+    configs.map((config) => config.gameId),
+    { refetchInterval: 60_000 }
   );
   const [session, setSession] = useState<AdminSession | null>(() =>
     getStoredAdminSession()
@@ -81,7 +81,7 @@ export default function AdminPage() {
   const clientId = getGoogleClientId();
   const adminEmails = getAdminEmails();
   const selectedEditGameId = selectedEditContext?.gameId;
-  const currentEditConfig = configs?.find(
+  const currentEditConfig = configs.find(
     (config) => config.gameId === selectedEditGameId
   );
   const { data: factions = [] } = useFactions(selectedEditGameId || undefined);
@@ -225,7 +225,7 @@ export default function AdminPage() {
 
   const gameSections = useMemo(
     () =>
-      (configs || []).map((config) => ({
+      configs.map((config) => ({
         config,
         matches: [...(allMatches[config.gameId] || [])].sort((a, b) => {
           const dateComparison = a.date.localeCompare(b.date);
@@ -296,10 +296,6 @@ export default function AdminPage() {
     },
     [refresh, toast]
   );
-
-  if (configsLoading) {
-    return <SiteLoading message="Cargando gestion..." />;
-  }
 
   if (!clientId || adminEmails.length === 0) {
     return (
