@@ -10,7 +10,7 @@ export function SiteLoading({ message }: SiteLoadingProps) {
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" />
           <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[24px] border border-red-500/30 bg-black/40 shadow-[0_0_40px_rgba(180,28,36,0.18)]">
             <img
-              src="/images/logoclub.png"
+              src="/images/logoclub.webp"
               alt="Horda de Plata"
               className="h-12 w-12 object-contain"
             />

@@ -73,14 +73,6 @@ const RAW_GAMES: RawGame[] = [
     estimatedDuration: "02:00",
   },
   {
-    gameId: "test",
-    displayName: "Testeame esta",
-    logo: "https://img.freepik.com/vector-gratis/lindo-pato-blanco_1308-41058.jpg?semt=ais_hybrid&w=740&q=80",
-    backgroundImage: "https://kinderlandar.vtexassets.com/arquivos/ids/196930/D_NQ_NP_2X_777427-MLA80653265765_112024-F.webp.webp?v=638723923388670000",
-    matchSize: "50x50",
-    estimatedDuration: "00:30",
-  },
-  {
     gameId: "warhammer-40k",
     displayName: "Warhammer 40,000",
     logo: "https://1000logos.net/wp-content/uploads/2022/11/Warhammer-logo.png",
