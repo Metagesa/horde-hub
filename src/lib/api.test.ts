@@ -5,16 +5,19 @@ import {
   parseMatch,
   saveMatch,
 } from "@/lib/api";
+import { storeAdminSession } from "@/lib/adminAuth";
 import { GAME_CONFIGS, TABLES, TABLE_TIME_SLOTS, getGameFactions } from "@/lib/localData";
 
 describe("local snapshot data", () => {
   it("provides configs without a runtime fetch and keeps built-in game data", () => {
     expect(GAME_CONFIGS.some((config) => config.gameId === "kill-team")).toBe(true);
     expect(GAME_CONFIGS.some((config) => config.gameId === "warmaster")).toBe(true);
+    expect(GAME_CONFIGS.some((config) => config.gameId === "age-of-sigmar")).toBe(true);
 
     const guildBall = GAME_CONFIGS.find((config) => config.gameId === "guild-ball");
     const killTeam = GAME_CONFIGS.find((config) => config.gameId === "kill-team");
     const warmaster = GAME_CONFIGS.find((config) => config.gameId === "warmaster");
+    const ageOfSigmar = GAME_CONFIGS.find((config) => config.gameId === "age-of-sigmar");
 
     expect(guildBall).toMatchObject({
       logo: "/images/games/GuildBall/logo.webp",
@@ -32,12 +35,20 @@ describe("local snapshot data", () => {
       logo: "",
       backgroundImage: "",
     });
+    expect(ageOfSigmar).toMatchObject({
+      displayName: "Age of Sigmar",
+      matchSize: "180x120",
+      estimatedDuration: "03:00",
+      logo: "",
+      backgroundImage: "",
+    });
   });
 
   it("provides local factions, tables, and time slots synchronously", () => {
     const guildBallFactions = getGameFactions("guild-ball");
     const killTeamFactions = getGameFactions("kill-team");
     const warmasterFactions = getGameFactions("warmaster");
+    const ageOfSigmarFactions = getGameFactions("age-of-sigmar");
 
     expect(guildBallFactions.find((faction) => faction.faction === "Alchemists"))
       .toMatchObject({
@@ -46,6 +57,7 @@ describe("local snapshot data", () => {
       });
     expect(killTeamFactions).toHaveLength(33);
     expect(warmasterFactions).toEqual([]);
+    expect(ageOfSigmarFactions).toEqual([]);
     expect(TABLES.map((table) => table.label)).toEqual([
       "90x90 #1",
       "90x90 #2",
@@ -60,6 +72,10 @@ describe("local snapshot data", () => {
 });
 
 describe("match api", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -102,32 +118,13 @@ describe("match api", () => {
   });
 
   it("falls back to empty arrays per game when a cross-game fetch fails", async () => {
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [
-          {
-            id: 1,
-            date: "2026-04-24",
-            playerA: "Alice",
-            factionA: "Alchemists",
-            playerB: "Bob",
-            factionB: "Butchers",
-            time: "19:30",
-          },
-        ],
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: false,
-        json: async () => [],
-      } as Response);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      json: async () => ({}),
+    } as Response);
 
     await expect(fetchAllMatches(["guild-ball", "warhammer-40k"])).resolves.toEqual({
-      "guild-ball": [
-        expect.objectContaining({
-          playerA: "Alice",
-        }),
-      ],
+      "guild-ball": [],
       "warhammer-40k": [],
     });
   });
@@ -157,6 +154,11 @@ describe("match api", () => {
   });
 
   it("posts normalized match payloads for writes", async () => {
+    storeAdminSession({
+      email: "admin@example.com",
+      name: "Admin",
+      credential: "jwt-token",
+    });
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
@@ -179,6 +181,11 @@ describe("match api", () => {
     ).resolves.toBe(true);
 
     const payload = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/matches");
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
+      Authorization: "Bearer jwt-token",
+      "Content-Type": "application/json",
+    });
     expect(payload).toMatchObject({
       gameId: "guild-ball",
       playerA: "ALICE",

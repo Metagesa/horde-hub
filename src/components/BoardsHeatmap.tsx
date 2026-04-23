@@ -5,12 +5,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { getBoardReservationAssignments } from "@/lib/tableAvailability";
-import type { GameConfig, GameTable, ParsedMatch } from "@/types";
+import type {
+  BoardReservationSlotAssignment,
+  GameConfig,
+  GameTable,
+  ParsedMatch,
+} from "@/types";
 
 interface BoardsHeatmapProps {
   tables: GameTable[];
-  allMatches: Record<string, ParsedMatch[]>;
+  assignmentsByTime: Record<string, BoardReservationSlotAssignment[]>;
   configs: GameConfig[];
   selectedDate: string;
   timeSlots: string[];
@@ -49,9 +53,8 @@ function getCellTone(reservation?: ReservationDetails) {
 
 export function BoardsHeatmap({
   tables,
-  allMatches,
+  assignmentsByTime,
   configs,
-  selectedDate,
   timeSlots,
   disabled = false,
 }: BoardsHeatmapProps) {
@@ -67,16 +70,14 @@ export function BoardsHeatmap({
 
   const reservationMap = useMemo(() => {
     const entries = timeSlots.flatMap((time) =>
-      getBoardReservationAssignments(tables, allMatches, time, selectedDate).map(
-        (assignment) => [
-          `${time}-${assignment.table.tableId}`,
-          buildReservationLabel(gameNames, assignment.gameId, assignment.match),
-        ] as const
-      )
+      (assignmentsByTime[time] || []).map((assignment) => [
+        `${time}-${assignment.tableId}`,
+        buildReservationLabel(gameNames, assignment.gameId, assignment.match),
+      ] as const)
     );
 
     return new Map(entries);
-  }, [allMatches, gameNames, selectedDate, tables, timeSlots]);
+  }, [assignmentsByTime, gameNames, timeSlots]);
 
   if (disabled) {
     return (

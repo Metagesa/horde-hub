@@ -1,189 +1,20 @@
 import type { ParsedMatch } from "@/types";
+import { getAdminCredential } from "@/lib/adminAuth";
+import {
+  buildMatchPayload,
+  parseMatch,
+  type MatchFetchState,
+  type MatchPayload,
+  type RawMatch,
+} from "@/lib/matchNormalization";
+import type { BoardAvailabilityState } from "@/types";
 
-const APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbwcmcsrOj7K28SPkiBNpDvcZlTslMxzNM2APiN5XYDwrvkJcjnwK3cspym4XcQ-HQfm/exec";
+const MATCHES_API_URL = "/api/matches";
+const BOARD_AVAILABILITY_API_URL = "/api/board-availability";
 const READ_TIMEOUT_MS = 8_000;
 const WRITE_TIMEOUT_MS = 10_000;
-
-type RawMatch = {
-  id: string | number;
-  date: string;
-  playerA: string;
-  factionA: string;
-  playerB: string;
-  factionB: string;
-  time: string;
-  tableId?: string;
-  tableSize?: string;
-  matchSize?: string;
-  duration?: string;
-  playerATime?: string;
-  playerBTime?: string;
-  scoreA?: string | number;
-  scoreB?: string | number;
-  played?: boolean | string;
-  status?: string;
-  createdAt?: string;
-};
-
-type MatchPayload = Partial<ParsedMatch> & {
-  reserveTable?: boolean;
-};
-
-export interface MatchFetchState {
-  matches: ParsedMatch[];
-  visibilityWarning: string | null;
-}
-
-function hasResultData(match: {
-  scoreA?: string | number | null;
-  scoreB?: string | number | null;
-  playerATime?: string;
-  playerBTime?: string;
-}): boolean {
-  return (
-    (match.scoreA !== "" &&
-      match.scoreA !== null &&
-      match.scoreA !== undefined) ||
-    (match.scoreB !== "" &&
-      match.scoreB !== null &&
-      match.scoreB !== undefined) ||
-    Boolean(String(match.playerATime || "").trim()) ||
-    Boolean(String(match.playerBTime || "").trim())
-  );
-}
-
-function deriveMatchState(match: {
-  scoreA?: string | number | null;
-  scoreB?: string | number | null;
-  playerATime?: string;
-  playerBTime?: string;
-}) {
-  const played = hasResultData(match);
-
-  return {
-    played,
-    status: played ? "completed" : "scheduled",
-  };
-}
-
-function normalizeStatus(value: unknown, played: boolean): string {
-  const normalized = String(value || "").trim().toLowerCase();
-
-  if (played || normalized === "completed" || normalized === "played") {
-    return "completed";
-  }
-
-  if (normalized === "cancelled" || normalized === "canceled") {
-    return "cancelled";
-  }
-
-  return "scheduled";
-}
-
-function normalizeDate(date?: string): string {
-  if (!date) {
-    return "";
-  }
-
-  return date.includes("T") ? date.split("T")[0] : date;
-}
-
-function padClockSegment(value: number): string {
-  return String(Math.max(0, value)).padStart(2, "0");
-}
-
-function parseColonParts(value?: string): number[] | null {
-  if (!value) {
-    return null;
-  }
-
-  const matched = String(value)
-    .trim()
-    .match(/^(\d{1,3})(?::(\d{2}))(?::(\d{2}))?$/);
-
-  if (!matched) {
-    return null;
-  }
-
-  return matched
-    .slice(1)
-    .filter((part): part is string => part !== undefined)
-    .map((part) => Number(part));
-}
-
-function normalizeTimeOfDay(value?: string): string {
-  if (!value) {
-    return "";
-  }
-
-  const parts = parseColonParts(value);
-  if (parts?.length === 3 || parts?.length === 2) {
-    return `${padClockSegment(parts[0])}:${padClockSegment(parts[1])}`;
-  }
-
-  if (typeof value === "string") {
-    const isoMatch = value.match(/T(\d{2}):(\d{2})/);
-    if (isoMatch) {
-      return `${isoMatch[1]}:${isoMatch[2]}`;
-    }
-  }
-
-  return String(value);
-}
-
-function normalizeDuration(value?: string): string {
-  if (!value) {
-    return "";
-  }
-
-  if (value === "TODO_EL_DIA") {
-    return value;
-  }
-
-  const parts = parseColonParts(value);
-  if (parts?.length === 3 || parts?.length === 2) {
-    return `${padClockSegment(parts[0])}:${padClockSegment(parts[1])}`;
-  }
-
-  if (typeof value === "string") {
-    const isoMatch = value.match(/T(\d{2}):(\d{2})/);
-    if (isoMatch) {
-      return `${isoMatch[1]}:${isoMatch[2]}`;
-    }
-  }
-
-  return String(value);
-}
-
-function normalizePlayerClock(value?: string): string {
-  if (!value) {
-    return "";
-  }
-
-  const parts = parseColonParts(value);
-  if (parts?.length === 3) {
-    const totalMinutes = parts[0] * 60 + parts[1];
-    return `${padClockSegment(totalMinutes)}:${padClockSegment(parts[2])}`;
-  }
-
-  if (parts?.length === 2) {
-    return `${padClockSegment(parts[0])}:${padClockSegment(parts[1])}`;
-  }
-
-  return String(value);
-}
-
-function normalizePlayed(value: unknown): boolean {
-  return (
-    value === true ||
-    value === "true" ||
-    value === "TRUE" ||
-    value === "✓" ||
-    value === "âœ“" ||
-    value === "Ã¢Å“â€œ"
-  );
-}
+const HTML_RESPONSE_MESSAGE =
+  "La API devolvio HTML en vez de JSON. Si estas en desarrollo, inicia el proyecto con Vercel Functions activas.";
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -218,56 +49,44 @@ async function parseSuccessResponse(res: Response): Promise<boolean> {
     return false;
   }
 
-  const data = (await res.json()) as { success?: unknown };
+  const data = (await parseJsonResponse(res)) as { success?: unknown };
   return Boolean(data.success);
 }
 
-export function parseMatch(raw: RawMatch): ParsedMatch {
-  const playerATime = normalizePlayerClock(raw.playerATime);
-  const playerBTime = normalizePlayerClock(raw.playerBTime);
-  const scoreA =
-    raw.scoreA !== "" && raw.scoreA !== undefined ? Number(raw.scoreA) : null;
-  const scoreB =
-    raw.scoreB !== "" && raw.scoreB !== undefined ? Number(raw.scoreB) : null;
-  const derivedState = deriveMatchState({
-    scoreA,
-    scoreB,
-    playerATime,
-    playerBTime,
-  });
-  const played = normalizePlayed(raw.played) || derivedState.played;
+async function parseJsonResponse(res: Response): Promise<unknown> {
+  const contentType = String(res.headers?.get?.("content-type") || "").toLowerCase();
 
-  return {
-    id: String(raw.id ?? ""),
-    date: normalizeDate(raw.date),
-    playerA: raw.playerA || "",
-    factionA: raw.factionA || "",
-    playerB: raw.playerB || "",
-    factionB: raw.factionB || "",
-    time: normalizeTimeOfDay(raw.time),
-    tableId: raw.tableId || "",
-    tableSize: raw.tableSize || "",
-    matchSize: raw.matchSize || "",
-    duration: normalizeDuration(raw.duration),
-    playerATime,
-    playerBTime,
-    scoreA,
-    scoreB,
-    played,
-    status: normalizeStatus(raw.status, played),
-    createdAt: raw.createdAt || "",
-  };
+  if (contentType.includes("application/json")) {
+    return res.json();
+  }
+
+  if (typeof res.text !== "function" && typeof res.json === "function") {
+    return res.json();
+  }
+
+  const text = await res.text();
+  const trimmed = text.trim();
+
+  if (trimmed.startsWith("<!doctype") || trimmed.startsWith("<html") || trimmed.startsWith("<")) {
+    throw new Error(HTML_RESPONSE_MESSAGE);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("La API devolvio una respuesta invalida.");
+  }
 }
 
 async function requestMatches(gameId: string): Promise<ParsedMatch[]> {
-  const res = await fetchWithTimeout(
-    `${APPS_SCRIPT_URL}?type=matches&gameId=${encodeURIComponent(gameId)}`
-  );
+  const url = new URL(MATCHES_API_URL, window.location.origin);
+  url.searchParams.set("gameId", gameId);
+  const res = await fetchWithTimeout(url);
   if (!res.ok) {
     throw new Error("No se pudieron cargar los partidos");
   }
 
-  const data: RawMatch[] = await res.json();
+  const data = (await parseJsonResponse(res)) as RawMatch[];
   return data
     .map(parseMatch)
     .filter((match) => match.playerA && match.date && match.time);
@@ -301,43 +120,77 @@ export async function fetchAllMatches(
   gameIds: string[]
 ): Promise<Record<string, ParsedMatch[]>> {
   const uniqueGameIds = [...new Set(gameIds)].filter(Boolean);
-  const matchesByGame = await Promise.allSettled(
-    uniqueGameIds.map(async (gameId) => [gameId, await fetchMatches(gameId)] as const)
-  );
 
-  return Object.fromEntries(
-    matchesByGame.map((result, index) => {
-      const gameId = uniqueGameIds[index];
-      return result.status === "fulfilled" ? result.value : [gameId, []];
-    })
-  );
+  if (uniqueGameIds.length === 0) {
+    return {};
+  }
+
+  const url = new URL(`${MATCHES_API_URL}/bulk`, window.location.origin);
+  uniqueGameIds.forEach((gameId) => url.searchParams.append("gameId", gameId));
+
+  try {
+    const res = await fetchWithTimeout(url);
+    if (!res.ok) {
+      throw new Error("No se pudieron cargar los partidos");
+    }
+
+    const data = (await parseJsonResponse(res)) as Record<string, RawMatch[]>;
+    return Object.fromEntries(
+      uniqueGameIds.map((gameId) => [
+        gameId,
+        (data[gameId] || [])
+          .map(parseMatch)
+          .filter((match) => match.playerA && match.date && match.time),
+      ])
+    );
+  } catch {
+    return Object.fromEntries(uniqueGameIds.map((gameId) => [gameId, []]));
+  }
 }
 
-function buildMatchPayload(gameId: string, match: MatchPayload) {
-  const state = deriveMatchState(match);
+export async function fetchBoardAvailability(
+  selectedDate?: string
+): Promise<BoardAvailabilityState> {
+  const url = new URL(BOARD_AVAILABILITY_API_URL, window.location.origin);
+
+  if (selectedDate) {
+    url.searchParams.set("date", selectedDate);
+  }
+
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) {
+    throw new Error("No se pudo cargar la disponibilidad de tablones");
+  }
+
+  const data = (await parseJsonResponse(res)) as BoardAvailabilityState;
 
   return {
-    gameId,
-    id: match.id,
-    date: match.date || "",
-    playerA: match.playerA || "",
-    factionA: match.factionA || "",
-    playerB: match.playerB || "",
-    factionB: match.factionB || "",
-    time: match.time || "",
-    tableId: match.tableId || "",
-    tableSize: match.tableSize || "",
-    matchSize: match.matchSize || "",
-    duration: match.duration || "",
-    playerATime: match.playerATime || "",
-    playerBTime: match.playerBTime || "",
-    scoreA:
-      match.scoreA !== null && match.scoreA !== undefined ? match.scoreA : "",
-    scoreB:
-      match.scoreB !== null && match.scoreB !== undefined ? match.scoreB : "",
-    played: state.played,
-    status: state.status,
-    reserveTable: Boolean(match.reserveTable),
+    ...data,
+    reservationMatches: Object.fromEntries(
+      Object.entries(data.reservationMatches || {}).map(([gameId, matches]) => [
+        gameId,
+        (matches || []).map(parseMatch),
+      ])
+    ),
+  };
+}
+
+function buildWriteInit(method: "POST" | "PATCH" | "DELETE", body?: unknown): RequestInit {
+  const credential = getAdminCredential();
+  const headers: Record<string, string> = {};
+
+  if (credential) {
+    headers.Authorization = `Bearer ${credential}`;
+  }
+
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  return {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
   };
 }
 
@@ -346,19 +199,18 @@ export async function saveMatch(
   match: MatchPayload
 ): Promise<boolean> {
   try {
+    const payload = buildMatchPayload(gameId, {
+      ...match,
+      played: match.played ?? false,
+      reserveTable: match.reserveTable ?? Boolean(match.tableId),
+    });
+    const isUpdate = Boolean(match.id);
+    const targetUrl = isUpdate
+      ? `${MATCHES_API_URL}/${encodeURIComponent(String(match.id))}`
+      : MATCHES_API_URL;
     const res = await fetchWithTimeout(
-      APPS_SCRIPT_URL,
-      {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify(
-          buildMatchPayload(gameId, {
-            ...match,
-            played: match.played ?? false,
-            reserveTable: match.reserveTable ?? Boolean(match.tableId),
-          })
-        ),
-      },
+      targetUrl,
+      buildWriteInit(isUpdate ? "PATCH" : "POST", payload),
       WRITE_TIMEOUT_MS
     );
 
@@ -377,22 +229,17 @@ export async function updateMatchResult(
   playerBTime: string
 ): Promise<boolean> {
   try {
+    const payload = buildMatchPayload(gameId, {
+      ...match,
+      scoreA,
+      scoreB,
+      playerATime,
+      playerBTime,
+      reserveTable: Boolean(match.tableId),
+    });
     const res = await fetchWithTimeout(
-      APPS_SCRIPT_URL,
-      {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify(
-          buildMatchPayload(gameId, {
-            ...match,
-            scoreA,
-            scoreB,
-            playerATime,
-            playerBTime,
-            reserveTable: Boolean(match.tableId),
-          })
-        ),
-      },
+      `${MATCHES_API_URL}/${encodeURIComponent(match.id)}`,
+      buildWriteInit("PATCH", payload),
       WRITE_TIMEOUT_MS
     );
 
@@ -407,17 +254,14 @@ export async function deleteMatch(
   matchId: string
 ): Promise<boolean> {
   try {
+    const url = new URL(
+      `${MATCHES_API_URL}/${encodeURIComponent(matchId)}`,
+      window.location.origin
+    );
+    url.searchParams.set("gameId", gameId);
     const res = await fetchWithTimeout(
-      APPS_SCRIPT_URL,
-      {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({
-          gameId,
-          action: "delete",
-          id: matchId,
-        }),
-      },
+      url,
+      buildWriteInit("DELETE"),
       WRITE_TIMEOUT_MS
     );
 
@@ -426,3 +270,5 @@ export async function deleteMatch(
     return false;
   }
 }
+
+export { parseMatch };

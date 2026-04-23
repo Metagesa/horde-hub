@@ -88,6 +88,14 @@ const RAW_GAMES: RawGame[] = [
     matchSize: "180x120",
     estimatedDuration: "03:00",
   },
+  {
+    gameId: "age-of-sigmar",
+    displayName: "Age of Sigmar",
+    logo: "",
+    backgroundImage: "",
+    matchSize: "180x120",
+    estimatedDuration: "03:00",
+  },
 ];
 
 const RAW_FACTIONS: LocalFaction[] = [

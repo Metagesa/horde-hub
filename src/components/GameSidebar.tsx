@@ -10,6 +10,9 @@ export function GameSidebar() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const isAdminRoute = location.pathname === "/gestion";
+  const sortedConfigs = [...(configs ?? [])].sort((left, right) =>
+    left.displayName.localeCompare(right.displayName)
+  );
 
   useEffect(() => {
     const handleOpenSidebar = () => setMobileOpen(true);
@@ -98,7 +101,7 @@ export function GameSidebar() {
                 </div>
 
                 <nav className="space-y-3">
-                  {configs?.map((config) => {
+                  {sortedConfigs.map((config) => {
                     const active = gameId === config.gameId;
 
                     return (

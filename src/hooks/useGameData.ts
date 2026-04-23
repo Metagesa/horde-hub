@@ -1,5 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchAllMatches, fetchMatchesWithState } from "@/lib/api";
+import {
+  fetchAllMatches,
+  fetchBoardAvailability,
+  fetchMatchesWithState,
+} from "@/lib/api";
 import {
   GAME_CONFIGS,
   TABLES,
@@ -77,5 +81,23 @@ export function useAllMatches(
     refetchOnReconnect: false,
     retry: false,
     enabled: enabled && normalizedGameIds.length > 0,
+  });
+}
+
+export function useBoardAvailability(
+  selectedDate?: string,
+  options: MatchQueryOptions = {}
+) {
+  const enabled = options.enabled ?? Boolean(selectedDate);
+
+  return useQuery({
+    queryKey: ["boardAvailability", selectedDate],
+    queryFn: () => fetchBoardAvailability(selectedDate),
+    staleTime: 30_000,
+    refetchInterval: options.refetchInterval ?? false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
+    enabled,
   });
 }

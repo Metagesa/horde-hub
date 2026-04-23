@@ -5,12 +5,10 @@ import { CalendarDays, LayoutGrid, Menu, ScrollText, Trophy } from "lucide-react
 import { deleteMatch } from "@/lib/api";
 
 import {
-  useAllMatches,
+  useBoardAvailability,
   useConfigs,
   useFactions,
   useMatches,
-  useTableTimeSlots,
-  useTables,
 } from "@/hooks/useGameData";
 import { FridayDatePicker } from "@/components/FridayDatePicker";
 import {
@@ -59,8 +57,6 @@ export default function GamePage() {
   const { toast } = useToast();
   const { data: configs } = useConfigs();
   const { data: factions = [] } = useFactions(gameId);
-  const { data: tables = [] } = useTables();
-  const { data: tableTimeSlots = [] } = useTableTimeSlots();
 
   const [tab, setTab] = useState<"agenda" | "registro" | "mesas" | "resultados">(
     "agenda"
@@ -72,7 +68,8 @@ export default function GamePage() {
   const [selectedResultMatch, setSelectedResultMatch] =
     useState<ParsedMatch | null>(null);
   const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
-  const needsCrossGameMatches =
+  const selectedDateIsPast = isPastDate(selectedDate);
+  const needsBoardAvailability =
     tab === "registro" || tab === "mesas" || selectedEditMatch !== null;
   const {
     data: matchesState = { matches: [], visibilityWarning: null },
@@ -84,30 +81,24 @@ export default function GamePage() {
   const upcomingRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const config = configs.find((item) => item.gameId === gameId);
-  const otherGameIds = useMemo(
-    () =>
-      configs
-        .map((item) => item.gameId)
-        .filter((configGameId) => configGameId !== gameId),
-    [configs, gameId]
-  );
   const {
-    data: otherMatches = {},
-    isLoading: allMatchesLoading,
-  } = useAllMatches(otherGameIds, {
-    enabled: needsCrossGameMatches,
-    refetchInterval: needsCrossGameMatches ? 60_000 : false,
+    data: boardAvailability = {
+      tables: [],
+      timeSlots: [],
+      reservationMatches: {},
+      assignmentsByTime: {},
+    },
+    isLoading: boardAvailabilityLoading,
+  } = useBoardAvailability(selectedDate, {
+    enabled: needsBoardAvailability && !selectedDateIsPast,
+    refetchInterval: needsBoardAvailability && !selectedDateIsPast ? 60_000 : false,
   });
-  const allMatches = useMemo(
-    () =>
-      gameId
-        ? {
-            [gameId]: matches,
-            ...otherMatches,
-          }
-        : otherMatches,
-    [gameId, matches, otherMatches]
-  );
+  const {
+    tables,
+    timeSlots: boardTimeSlots,
+    reservationMatches,
+    assignmentsByTime,
+  } = boardAvailability;
 
   const gameMatchesForSelectedDate = useMemo(
     () =>
@@ -134,8 +125,8 @@ export default function GamePage() {
   );
 
   const effectiveTimeSlots = useMemo(() => {
-    if (tableTimeSlots.length > 0) {
-      return tableTimeSlots;
+    if (boardTimeSlots.length > 0) {
+      return boardTimeSlots;
     }
 
     return Array.from(
@@ -146,9 +137,22 @@ export default function GamePage() {
           .sort((a, b) => a.localeCompare(b))
       )
     );
-  }, [matches, tableTimeSlots]);
-
-  const selectedDateIsPast = isPastDate(selectedDate);
+  }, [boardTimeSlots, matches]);
+  const reservationMatchesWithCurrentGame = useMemo(
+    () =>
+      gameId
+        ? {
+            ...reservationMatches,
+            [gameId]: matches.filter(
+              (match) =>
+                match.date === selectedDate &&
+                !match.played &&
+                (Boolean(match.tableId) || Boolean(match.tableSize))
+            ),
+          }
+        : reservationMatches,
+    [gameId, matches, reservationMatches, selectedDate]
+  );
   const matchesErrorMessage =
     matchesError instanceof Error
       ? matchesError.message
@@ -156,7 +160,7 @@ export default function GamePage() {
 
   const refresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["matches", gameId] });
-    queryClient.invalidateQueries({ queryKey: ["allMatches"] });
+    queryClient.invalidateQueries({ queryKey: ["boardAvailability"] });
   }, [gameId, queryClient]);
 
   const download = async (
@@ -218,7 +222,9 @@ export default function GamePage() {
   };
 
   const reservationDataPending =
-    needsCrossGameMatches && (matchesLoading || allMatchesLoading);
+    needsBoardAvailability &&
+    !selectedDateIsPast &&
+    (matchesLoading || boardAvailabilityLoading);
 
   return (
     <div className="relative px-4 py-6 sm:px-6 sm:py-8">
@@ -418,7 +424,7 @@ export default function GamePage() {
                   factions={factions}
                   tables={tables}
                   timeSlots={effectiveTimeSlots}
-                  allMatches={allMatches}
+                  allMatches={reservationMatchesWithCurrentGame}
                   onSuccess={refresh}
                   forcedDate={selectedDate}
                   disabled={selectedDateIsPast}
@@ -440,7 +446,7 @@ export default function GamePage() {
             >
               <BoardsHeatmap
                 tables={tables}
-                allMatches={allMatches}
+                assignmentsByTime={assignmentsByTime}
                 configs={configs}
                 selectedDate={selectedDate}
                 timeSlots={effectiveTimeSlots}
@@ -508,7 +514,7 @@ export default function GamePage() {
                 factions={factions}
                 tables={tables}
                 timeSlots={effectiveTimeSlots}
-                allMatches={allMatches}
+                allMatches={reservationMatchesWithCurrentGame}
                 onClose={() => setSelectedEditMatch(null)}
                 onSuccess={refresh}
               />
