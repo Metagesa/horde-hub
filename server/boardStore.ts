@@ -1,4 +1,3 @@
-import { neon } from "@neondatabase/serverless";
 import { TABLES, TABLE_TIME_SLOTS } from "../src/lib/localData";
 import { getBoardReservationAssignments } from "../src/lib/tableAvailability";
 import type {
@@ -7,6 +6,7 @@ import type {
   GameTable,
   ParsedMatch,
 } from "../src/types";
+import { getSql, isDatabaseUnavailableError } from "./database";
 import { listActiveReservationMatchesByDate } from "./matchStore";
 
 type BoardTableRow = {
@@ -22,26 +22,6 @@ type BoardTimeSlotRow = {
   sort_order: number;
 };
 
-let sqlClient: ReturnType<typeof neon> | null = null;
-
-function getDatabaseUrl() {
-  const value = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
-
-  if (!value) {
-    throw new Error("DATABASE_URL is not configured");
-  }
-
-  return value;
-}
-
-function getSql() {
-  if (!sqlClient) {
-    sqlClient = neon(getDatabaseUrl());
-  }
-
-  return sqlClient;
-}
-
 function mapBoardTable(row: BoardTableRow): GameTable {
   return {
     tableId: row.table_id,
@@ -53,25 +33,41 @@ function mapBoardTable(row: BoardTableRow): GameTable {
 }
 
 export async function listBoardTables(): Promise<GameTable[]> {
-  const sql = getSql();
-  const rows = (await sql.query(
-    `SELECT table_id, size, label, column_index, enabled
-     FROM board_tables
-     ORDER BY column_index ASC`
-  )) as BoardTableRow[];
+  try {
+    const sql = getSql();
+    const rows = (await sql.query(
+      `SELECT table_id, size, label, column_index, enabled
+       FROM board_tables
+       ORDER BY column_index ASC`
+    )) as BoardTableRow[];
 
-  return rows.length > 0 ? rows.map(mapBoardTable) : TABLES;
+    return rows.length > 0 ? rows.map(mapBoardTable) : TABLES;
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) {
+      return TABLES;
+    }
+
+    throw error;
+  }
 }
 
 export async function listBoardTimeSlots(): Promise<string[]> {
-  const sql = getSql();
-  const rows = (await sql.query(
-    `SELECT time, sort_order
-     FROM board_time_slots
-     ORDER BY sort_order ASC, time ASC`
-  )) as BoardTimeSlotRow[];
+  try {
+    const sql = getSql();
+    const rows = (await sql.query(
+      `SELECT time, sort_order
+       FROM board_time_slots
+       ORDER BY sort_order ASC, time ASC`
+    )) as BoardTimeSlotRow[];
 
-  return rows.length > 0 ? rows.map((row) => row.time) : TABLE_TIME_SLOTS;
+    return rows.length > 0 ? rows.map((row) => row.time) : TABLE_TIME_SLOTS;
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) {
+      return TABLE_TIME_SLOTS;
+    }
+
+    throw error;
+  }
 }
 
 function getRelevantTimeSlots(

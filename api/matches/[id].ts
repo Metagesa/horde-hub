@@ -1,4 +1,5 @@
 import { verifyAdminCredential } from "../../server/adminAuth";
+import { getDatabaseErrorStatus } from "../../server/database";
 import { json, getBearerToken, requireJsonBody } from "../../server/http";
 import { deleteMatch, updateMatch } from "../../server/matchStore";
 
@@ -29,7 +30,7 @@ export default async function handler(req: any, res: any) {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "No se pudo guardar el partido";
-      return json(res, 500, { success: false, message });
+      return json(res, getDatabaseErrorStatus(error), { success: false, message });
     }
   }
 
@@ -46,7 +47,7 @@ export default async function handler(req: any, res: any) {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "No se pudo eliminar el partido";
-      return json(res, 500, { success: false, message });
+      return json(res, getDatabaseErrorStatus(error), { success: false, message });
     }
   }
 

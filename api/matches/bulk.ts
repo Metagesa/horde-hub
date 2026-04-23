@@ -1,4 +1,5 @@
 import { json } from "../../server/http";
+import { getDatabaseErrorStatus } from "../../server/database";
 import { listMatchesByGameIds } from "../../server/matchStore";
 
 function getGameIds(query: Record<string, unknown>) {
@@ -27,6 +28,6 @@ export default async function handler(req: any, res: any) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudieron cargar los partidos";
-    return json(res, 500, { message });
+    return json(res, getDatabaseErrorStatus(error), { message });
   }
 }

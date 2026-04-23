@@ -1,5 +1,5 @@
-import { neon } from "@neondatabase/serverless";
 import { parseMatch, type RawMatch } from "../src/lib/matchNormalization";
+import { getSql, isDatabaseUnavailableError } from "./database";
 
 type MatchRow = {
   id: string;
@@ -44,26 +44,6 @@ export type MatchWriteInput = {
   played?: boolean;
   status?: string;
 };
-
-let sqlClient: ReturnType<typeof neon> | null = null;
-
-function getDatabaseUrl() {
-  const value = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
-
-  if (!value) {
-    throw new Error("DATABASE_URL is not configured");
-  }
-
-  return value;
-}
-
-function getSql() {
-  if (!sqlClient) {
-    sqlClient = neon(getDatabaseUrl());
-  }
-
-  return sqlClient;
-}
 
 function mapRowToRawMatch(row: MatchRow): RawMatch {
   return {
@@ -125,16 +105,24 @@ export function normalizeMatchWriteInput(input: MatchWriteInput) {
 }
 
 export async function listMatches(gameId: string) {
-  const sql = getSql();
-  const rows = await sql.query(
-    `SELECT *
-     FROM matches
-     WHERE game_id = $1
-     ORDER BY date ASC, time ASC, created_at ASC`,
-    [gameId]
-  );
+  try {
+    const sql = getSql();
+    const rows = await sql.query(
+      `SELECT *
+       FROM matches
+       WHERE game_id = $1
+       ORDER BY date ASC, time ASC, created_at ASC`,
+      [gameId]
+    );
 
-  return rows.map((row) => parseMatch(mapRowToRawMatch(row as MatchRow)));
+    return rows.map((row) => parseMatch(mapRowToRawMatch(row as MatchRow)));
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) {
+      return [];
+    }
+
+    throw error;
+  }
 }
 
 export async function listMatchesByGameIds(gameIds: string[]) {
@@ -144,23 +132,30 @@ export async function listMatchesByGameIds(gameIds: string[]) {
     return {};
   }
 
-  const sql = getSql();
-  const rows = await sql.query(
-    `SELECT *
-     FROM matches
-     WHERE game_id = ANY($1::text[])
-     ORDER BY game_id ASC, date ASC, time ASC, created_at ASC`,
-    [uniqueGameIds]
-  );
-
   const grouped = Object.fromEntries(uniqueGameIds.map((gameId) => [gameId, []]));
+  try {
+    const sql = getSql();
+    const rows = await sql.query(
+      `SELECT *
+       FROM matches
+       WHERE game_id = ANY($1::text[])
+       ORDER BY game_id ASC, date ASC, time ASC, created_at ASC`,
+      [uniqueGameIds]
+    );
 
-  rows.forEach((row) => {
-    const record = row as MatchRow;
-    grouped[record.game_id].push(parseMatch(mapRowToRawMatch(record)));
-  });
+    rows.forEach((row) => {
+      const record = row as MatchRow;
+      grouped[record.game_id].push(parseMatch(mapRowToRawMatch(record)));
+    });
 
-  return grouped;
+    return grouped;
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) {
+      return grouped;
+    }
+
+    throw error;
+  }
 }
 
 export async function listActiveReservationMatchesByDate(
@@ -173,29 +168,36 @@ export async function listActiveReservationMatchesByDate(
     return {};
   }
 
-  const sql = getSql();
-  const rows = await sql.query(
-    `SELECT *
-     FROM matches
-     WHERE game_id = ANY($1::text[])
-       AND date = $2::date
-       AND played = false
-       AND (
-         COALESCE(table_id, '') <> ''
-         OR COALESCE(table_size, '') <> ''
-       )
-     ORDER BY game_id ASC, time ASC, created_at ASC`,
-    [uniqueGameIds, selectedDate]
-  );
-
   const grouped = Object.fromEntries(uniqueGameIds.map((gameId) => [gameId, []]));
+  try {
+    const sql = getSql();
+    const rows = await sql.query(
+      `SELECT *
+       FROM matches
+       WHERE game_id = ANY($1::text[])
+         AND date = $2::date
+         AND played = false
+         AND (
+           COALESCE(table_id, '') <> ''
+           OR COALESCE(table_size, '') <> ''
+         )
+       ORDER BY game_id ASC, time ASC, created_at ASC`,
+      [uniqueGameIds, selectedDate]
+    );
 
-  rows.forEach((row) => {
-    const record = row as MatchRow;
-    grouped[record.game_id].push(parseMatch(mapRowToRawMatch(record)));
-  });
+    rows.forEach((row) => {
+      const record = row as MatchRow;
+      grouped[record.game_id].push(parseMatch(mapRowToRawMatch(record)));
+    });
 
-  return grouped;
+    return grouped;
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) {
+      return grouped;
+    }
+
+    throw error;
+  }
 }
 
 export async function createMatch(input: MatchWriteInput) {

@@ -1,4 +1,5 @@
 import { GAME_CONFIGS } from "../src/lib/localData";
+import { getDatabaseErrorStatus } from "../server/database";
 import { getBoardAvailability } from "../server/boardStore";
 import { json } from "../server/http";
 
@@ -21,6 +22,6 @@ export default async function handler(req: any, res: any) {
       error instanceof Error
         ? error.message
         : "No se pudo cargar la disponibilidad de tablones";
-    return json(res, 500, { message });
+    return json(res, getDatabaseErrorStatus(error), { message });
   }
 }
