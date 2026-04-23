@@ -2,6 +2,7 @@ import type { ParsedMatch } from "@/types";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbwcmcsrOj7K28SPkiBNpDvcZlTslMxzNM2APiN5XYDwrvkJcjnwK3cspym4XcQ-HQfm/exec";
+const FALLBACK_ONLY_GAME_IDS = new Set(["kill-team"]);
 const READ_TIMEOUT_MS = 8_000;
 const WRITE_TIMEOUT_MS = 10_000;
 
@@ -198,6 +199,10 @@ async function fetchWithTimeout(
       throw new Error("La solicitud tardo demasiado");
     }
 
+    if (error instanceof TypeError) {
+      throw new Error("No se pudo conectar con el servicio de partidas");
+    }
+
     throw error;
   } finally {
     globalThis.clearTimeout(timeoutId);
@@ -255,17 +260,25 @@ export async function fetchMatches(gameId?: string): Promise<ParsedMatch[]> {
     return [];
   }
 
-  const res = await fetchWithTimeout(
-    `${APPS_SCRIPT_URL}?type=matches&gameId=${encodeURIComponent(gameId)}`
-  );
-  if (!res.ok) {
-    throw new Error("No se pudieron cargar los partidos");
-  }
+  try {
+    const res = await fetchWithTimeout(
+      `${APPS_SCRIPT_URL}?type=matches&gameId=${encodeURIComponent(gameId)}`
+    );
+    if (!res.ok) {
+      throw new Error("No se pudieron cargar los partidos");
+    }
 
-  const data: RawMatch[] = await res.json();
-  return data
-    .map(parseMatch)
-    .filter((match) => match.playerA && match.date && match.time);
+    const data: RawMatch[] = await res.json();
+    return data
+      .map(parseMatch)
+      .filter((match) => match.playerA && match.date && match.time);
+  } catch (error) {
+    if (FALLBACK_ONLY_GAME_IDS.has(gameId)) {
+      return [];
+    }
+
+    throw error;
+  }
 }
 
 export async function fetchAllMatches(

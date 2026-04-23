@@ -115,6 +115,20 @@ describe("match api", () => {
     });
   });
 
+  it("returns an empty list for fallback-only kill team when the remote fetch is unreachable", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await expect(fetchMatches("kill-team")).resolves.toEqual([]);
+  });
+
+  it("surfaces a normalized connection error for non-fallback games", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await expect(fetchMatches("guild-ball")).rejects.toThrow(
+      "No se pudo conectar con el servicio de partidas"
+    );
+  });
+
   it("posts normalized match payloads for writes", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
