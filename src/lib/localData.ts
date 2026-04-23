@@ -80,6 +80,14 @@ const RAW_GAMES: RawGame[] = [
     matchSize: "180x90",
     estimatedDuration: "04:00",
   },
+  {
+    gameId: "warmaster",
+    displayName: "Warmaster",
+    logo: "",
+    backgroundImage: "",
+    matchSize: "180x120",
+    estimatedDuration: "03:00",
+  },
 ];
 
 const RAW_FACTIONS: LocalFaction[] = [

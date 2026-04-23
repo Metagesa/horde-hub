@@ -8,11 +8,13 @@ import {
 import { GAME_CONFIGS, TABLES, TABLE_TIME_SLOTS, getGameFactions } from "@/lib/localData";
 
 describe("local snapshot data", () => {
-  it("provides configs without a runtime fetch and keeps kill team fallback data", () => {
+  it("provides configs without a runtime fetch and keeps built-in game data", () => {
     expect(GAME_CONFIGS.some((config) => config.gameId === "kill-team")).toBe(true);
+    expect(GAME_CONFIGS.some((config) => config.gameId === "warmaster")).toBe(true);
 
     const guildBall = GAME_CONFIGS.find((config) => config.gameId === "guild-ball");
     const killTeam = GAME_CONFIGS.find((config) => config.gameId === "kill-team");
+    const warmaster = GAME_CONFIGS.find((config) => config.gameId === "warmaster");
 
     expect(guildBall).toMatchObject({
       logo: "/images/games/GuildBall/logo.webp",
@@ -23,11 +25,19 @@ describe("local snapshot data", () => {
       matchSize: "76x56",
       estimatedDuration: "02:00",
     });
+    expect(warmaster).toMatchObject({
+      displayName: "Warmaster",
+      matchSize: "180x120",
+      estimatedDuration: "03:00",
+      logo: "",
+      backgroundImage: "",
+    });
   });
 
   it("provides local factions, tables, and time slots synchronously", () => {
     const guildBallFactions = getGameFactions("guild-ball");
     const killTeamFactions = getGameFactions("kill-team");
+    const warmasterFactions = getGameFactions("warmaster");
 
     expect(guildBallFactions.find((faction) => faction.faction === "Alchemists"))
       .toMatchObject({
@@ -35,6 +45,7 @@ describe("local snapshot data", () => {
         color: "#d97706",
       });
     expect(killTeamFactions).toHaveLength(33);
+    expect(warmasterFactions).toEqual([]);
     expect(TABLES.map((table) => table.label)).toEqual([
       "90x90 #1",
       "90x90 #2",
@@ -121,20 +132,20 @@ describe("match api", () => {
     });
   });
 
-  it("returns an empty list for fallback-only kill team when the remote fetch is unreachable", async () => {
+  it("surfaces a normalized connection error for kill team when the remote fetch is unreachable", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
 
-    await expect(fetchMatches("kill-team")).resolves.toEqual([]);
+    await expect(fetchMatches("kill-team")).rejects.toThrow(
+      "No se pudo conectar con el servicio de partidas"
+    );
   });
 
-  it("returns a visibility warning for fallback-only kill team when the remote fetch is unreachable", async () => {
+  it("does not provide a special visibility warning for kill team when the remote fetch is unreachable", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
 
-    await expect(fetchMatchesWithState("kill-team")).resolves.toEqual({
-      matches: [],
-      visibilityWarning:
-        "IMPORTANTE: no se podran cargar partidas ni guardar nuevas partidas. Comunicate con administracion.",
-    });
+    await expect(fetchMatchesWithState("kill-team")).rejects.toThrow(
+      "No se pudo conectar con el servicio de partidas"
+    );
   });
 
   it("surfaces a normalized connection error for non-fallback games", async () => {

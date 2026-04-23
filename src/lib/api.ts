@@ -2,7 +2,6 @@ import type { ParsedMatch } from "@/types";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbwcmcsrOj7K28SPkiBNpDvcZlTslMxzNM2APiN5XYDwrvkJcjnwK3cspym4XcQ-HQfm/exec";
-const FALLBACK_ONLY_GAME_IDS = new Set(["kill-team"]);
 const READ_TIMEOUT_MS = 8_000;
 const WRITE_TIMEOUT_MS = 10_000;
 
@@ -279,15 +278,7 @@ export async function fetchMatches(gameId?: string): Promise<ParsedMatch[]> {
     return [];
   }
 
-  try {
-    return await requestMatches(gameId);
-  } catch (error) {
-    if (FALLBACK_ONLY_GAME_IDS.has(gameId)) {
-      return [];
-    }
-
-    throw error;
-  }
+  return requestMatches(gameId);
 }
 
 export async function fetchMatchesWithState(
@@ -300,22 +291,10 @@ export async function fetchMatchesWithState(
     };
   }
 
-  try {
-    return {
-      matches: await requestMatches(gameId),
-      visibilityWarning: null,
-    };
-  } catch (error) {
-    if (FALLBACK_ONLY_GAME_IDS.has(gameId)) {
-      return {
-        matches: [],
-        visibilityWarning:
-          "IMPORTANTE: no se podran cargar partidas ni guardar nuevas partidas. Comunicate con administracion.",
-      };
-    }
-
-    throw error;
-  }
+  return {
+    matches: await requestMatches(gameId),
+    visibilityWarning: null,
+  };
 }
 
 export async function fetchAllMatches(
