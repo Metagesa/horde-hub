@@ -1,5 +1,6 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useConfigs } from "@/hooks/useGameData";
+import { clubLogoUrl } from "@/lib/assets";
 import { ArrowLeft, Heart, Swords, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -41,7 +42,7 @@ export function GameSidebar() {
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-[18px] border border-red-500/30 bg-black/35 shadow-[0_0_24px_rgba(180,28,36,0.18)]">
                   <img
-                    src="/images/logoclub.webp"
+                    src={clubLogoUrl}
                     alt="Horda de Plata"
                     className="h-8 w-8 object-contain"
                   />

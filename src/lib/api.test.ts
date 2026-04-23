@@ -1,4 +1,10 @@
-import { fetchAllMatches, fetchMatches, parseMatch, saveMatch } from "@/lib/api";
+import {
+  fetchAllMatches,
+  fetchMatches,
+  fetchMatchesWithState,
+  parseMatch,
+  saveMatch,
+} from "@/lib/api";
 import { GAME_CONFIGS, TABLES, TABLE_TIME_SLOTS, getGameFactions } from "@/lib/localData";
 
 describe("local snapshot data", () => {
@@ -119,6 +125,16 @@ describe("match api", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
 
     await expect(fetchMatches("kill-team")).resolves.toEqual([]);
+  });
+
+  it("returns a visibility warning for fallback-only kill team when the remote fetch is unreachable", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await expect(fetchMatchesWithState("kill-team")).resolves.toEqual({
+      matches: [],
+      visibilityWarning:
+        "IMPORTANTE: no se podran cargar partidas ni guardar nuevas partidas. Comunicate con administracion.",
+    });
   });
 
   it("surfaces a normalized connection error for non-fallback games", async () => {

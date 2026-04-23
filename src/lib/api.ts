@@ -31,6 +31,11 @@ type MatchPayload = Partial<ParsedMatch> & {
   reserveTable?: boolean;
 };
 
+export interface MatchFetchState {
+  matches: ParsedMatch[];
+  visibilityWarning: string | null;
+}
+
 function hasResultData(match: {
   scoreA?: string | number | null;
   scoreB?: string | number | null;
@@ -255,26 +260,58 @@ export function parseMatch(raw: RawMatch): ParsedMatch {
   };
 }
 
+async function requestMatches(gameId: string): Promise<ParsedMatch[]> {
+  const res = await fetchWithTimeout(
+    `${APPS_SCRIPT_URL}?type=matches&gameId=${encodeURIComponent(gameId)}`
+  );
+  if (!res.ok) {
+    throw new Error("No se pudieron cargar los partidos");
+  }
+
+  const data: RawMatch[] = await res.json();
+  return data
+    .map(parseMatch)
+    .filter((match) => match.playerA && match.date && match.time);
+}
+
 export async function fetchMatches(gameId?: string): Promise<ParsedMatch[]> {
   if (!gameId) {
     return [];
   }
 
   try {
-    const res = await fetchWithTimeout(
-      `${APPS_SCRIPT_URL}?type=matches&gameId=${encodeURIComponent(gameId)}`
-    );
-    if (!res.ok) {
-      throw new Error("No se pudieron cargar los partidos");
-    }
-
-    const data: RawMatch[] = await res.json();
-    return data
-      .map(parseMatch)
-      .filter((match) => match.playerA && match.date && match.time);
+    return await requestMatches(gameId);
   } catch (error) {
     if (FALLBACK_ONLY_GAME_IDS.has(gameId)) {
       return [];
+    }
+
+    throw error;
+  }
+}
+
+export async function fetchMatchesWithState(
+  gameId?: string
+): Promise<MatchFetchState> {
+  if (!gameId) {
+    return {
+      matches: [],
+      visibilityWarning: null,
+    };
+  }
+
+  try {
+    return {
+      matches: await requestMatches(gameId),
+      visibilityWarning: null,
+    };
+  } catch (error) {
+    if (FALLBACK_ONLY_GAME_IDS.has(gameId)) {
+      return {
+        matches: [],
+        visibilityWarning:
+          "IMPORTANTE: no se podran cargar partidas ni guardar nuevas partidas. Comunicate con administracion.",
+      };
     }
 
     throw error;

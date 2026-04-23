@@ -1,6 +1,7 @@
 import { forwardRef, useState } from "react";
 import { Edit2, Trash2, Trophy } from "lucide-react";
 import type { ParsedMatch } from "@/types";
+import { clubLogoUrl, getPublicAssetPath } from "@/lib/assets";
 
 interface MatchCardProps {
   matches: ParsedMatch[];
@@ -297,8 +298,9 @@ const MatchCard = forwardRef<HTMLDivElement, MatchCardProps>(
       }
     });
 
-    const finalBg = backgroundUrl || "/images/games/GuildBall/background.webp";
-    const finalLogo = logoUrl || "/images/logoclub.webp";
+    const finalBg =
+      backgroundUrl || getPublicAssetPath("images/games/GuildBall/background.webp");
+    const finalLogo = logoUrl || clubLogoUrl;
 
     return (
       <div className="flex w-full justify-center">

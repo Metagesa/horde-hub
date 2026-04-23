@@ -18,6 +18,7 @@ import {
   getCurrentOrNextFriday,
   isPastDate,
 } from "@/lib/dates";
+import { clubLogoUrl } from "@/lib/assets";
 import MatchCard from "@/components/MatchCard";
 import { SiteLoading } from "@/components/SiteLoading";
 import { Button } from "@/components/ui/button";
@@ -74,10 +75,11 @@ export default function GamePage() {
   const needsCrossGameMatches =
     tab === "registro" || tab === "mesas" || selectedEditMatch !== null;
   const {
-    data: matches = [],
+    data: matchesState = { matches: [], visibilityWarning: null },
     isLoading: matchesLoading,
     error: matchesError,
   } = useMatches(gameId, { refetchInterval: 60_000 });
+  const { matches, visibilityWarning } = matchesState;
 
   const upcomingRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -238,7 +240,7 @@ export default function GamePage() {
               <div className="flex sm:hidden">
                 <div className="flex shrink-0 items-center gap-2 rounded-full border border-red-500/20 bg-black/30 px-2.5 py-1.5">
                   <img
-                    src="/images/logoclub.webp"
+                    src={clubLogoUrl}
                     alt="Horda de Plata"
                     className="h-6 w-6 object-contain"
                   />
@@ -260,7 +262,7 @@ export default function GamePage() {
                     />
                   ) : (
                     <img
-                      src="/images/logoclub.webp"
+                      src={clubLogoUrl}
                       alt="Horda de Plata"
                       className="h-8 w-8 object-contain"
                     />
@@ -276,7 +278,7 @@ export default function GamePage() {
 
               <div className="hidden shrink-0 items-center gap-2 rounded-full border border-red-500/20 bg-black/30 px-2.5 py-1.5 sm:flex sm:gap-3 sm:px-3 sm:py-2">
                 <img
-                  src="/images/logoclub.webp"
+                  src={clubLogoUrl}
                   alt="Horda de Plata"
                   className="h-6 w-6 object-contain sm:h-8 sm:w-8"
                 />
@@ -349,6 +351,12 @@ export default function GamePage() {
         {matchesError ? (
           <section className="rounded-[24px] border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             {matchesErrorMessage}
+          </section>
+        ) : null}
+
+        {visibilityWarning ? (
+          <section className="rounded-[24px] border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            {visibilityWarning}
           </section>
         ) : null}
 

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchAllMatches, fetchMatches } from "@/lib/api";
+import { fetchAllMatches, fetchMatchesWithState } from "@/lib/api";
 import {
   GAME_CONFIGS,
   TABLES,
@@ -51,7 +51,7 @@ export function useMatches(gameId?: string, options: MatchQueryOptions = {}) {
 
   return useQuery({
     queryKey: ["matches", gameId],
-    queryFn: () => fetchMatches(gameId),
+    queryFn: () => fetchMatchesWithState(gameId),
     enabled,
     staleTime: 30_000,
     refetchInterval: options.refetchInterval ?? false,
