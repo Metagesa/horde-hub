@@ -3,16 +3,8 @@ import { useConfigs } from "@/hooks/useGameData";
 import { ArrowLeft, Heart, Swords, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const proxyImage = (url?: string) => {
-  if (!url) return "";
-  if (url.startsWith("http")) {
-    return `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
-  }
-  return url;
-};
-
 export function GameSidebar() {
-  const { data: configs, isLoading } = useConfigs();
+  const { data: configs } = useConfigs();
   const { gameId } = useParams();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -49,7 +41,7 @@ export function GameSidebar() {
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-[18px] border border-red-500/30 bg-black/35 shadow-[0_0_24px_rgba(180,28,36,0.18)]">
                   <img
-                    src="/images/logoclub.png"
+                    src="/images/logoclub.webp"
                     alt="Horda de Plata"
                     className="h-8 w-8 object-contain"
                   />
@@ -104,72 +96,60 @@ export function GameSidebar() {
                   </p>
                 </div>
 
-                {isLoading ? (
-                  <div className="space-y-3 px-1">
-                    {[1, 2, 3].map((item) => (
-                      <div
-                        key={item}
-                        className="site-panel h-[78px] animate-pulse rounded-[24px] border border-white/8 bg-white/[0.03]"
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <nav className="space-y-3">
-                    {configs?.map((config) => {
-                      const active = gameId === config.gameId;
-                      const logo = proxyImage(config.logo);
+                <nav className="space-y-3">
+                  {configs?.map((config) => {
+                    const active = gameId === config.gameId;
 
-                      return (
-                        <Link
-                          key={config.gameId}
-                          to={`/game/${config.gameId}`}
-                          onClick={() => setMobileOpen(false)}
-                          className={`site-panel group flex items-center gap-4 rounded-[24px] border px-3 py-3 transition-all duration-200 ${
+                    return (
+                      <Link
+                        key={config.gameId}
+                        to={`/game/${config.gameId}`}
+                        onClick={() => setMobileOpen(false)}
+                        className={`site-panel group flex items-center gap-4 rounded-[24px] border px-3 py-3 transition-all duration-200 ${
+                          active
+                            ? "border-gold/50 bg-gradient-to-r from-red-950/60 via-black/55 to-black/45 shadow-[0_18px_38px_rgba(0,0,0,0.28)]"
+                            : "border-white/8 bg-white/[0.03] hover:border-red-400/30 hover:bg-white/[0.05]"
+                        }`}
+                      >
+                        <div
+                          className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border ${
                             active
-                              ? "border-gold/50 bg-gradient-to-r from-red-950/60 via-black/55 to-black/45 shadow-[0_18px_38px_rgba(0,0,0,0.28)]"
-                              : "border-white/8 bg-white/[0.03] hover:border-red-400/30 hover:bg-white/[0.05]"
+                              ? "border-gold/50 bg-black/45"
+                              : "border-white/10 bg-black/35"
                           }`}
                         >
-                          <div
-                            className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border ${
-                              active
-                                ? "border-gold/50 bg-black/45"
-                                : "border-white/10 bg-black/35"
+                          {config.logo ? (
+                            <img
+                              src={config.logo}
+                              alt={config.displayName}
+                              className="h-10 w-10 object-contain"
+                            />
+                          ) : (
+                            <Swords className="h-5 w-5 text-gold-light" />
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={`truncate font-heading text-sm tracking-[0.18em] ${
+                              active ? "text-gold-light" : "text-white"
                             }`}
                           >
-                            {logo ? (
-                              <img
-                                src={logo}
-                                alt={config.displayName}
-                                className="h-10 w-10 object-contain"
-                              />
-                            ) : (
-                              <Swords className="h-5 w-5 text-gold-light" />
-                            )}
-                          </div>
+                            {config.displayName}
+                          </p>
+                        </div>
 
-                          <div className="min-w-0 flex-1">
-                            <p
-                              className={`truncate font-heading text-sm tracking-[0.18em] ${
-                                active ? "text-gold-light" : "text-white"
-                              }`}
-                            >
-                              {config.displayName}
-                            </p>
-                          </div>
-
-                          <div
-                            className={`h-10 w-1 rounded-full transition-colors ${
-                              active
-                                ? "bg-gold-light"
-                                : "bg-transparent group-hover:bg-red-400/40"
-                            }`}
-                          />
-                        </Link>
-                      );
-                    })}
-                  </nav>
-                )}
+                        <div
+                          className={`h-10 w-1 rounded-full transition-colors ${
+                            active
+                              ? "bg-gold-light"
+                              : "bg-transparent group-hover:bg-red-400/40"
+                          }`}
+                        />
+                      </Link>
+                    );
+                  })}
+                </nav>
               </>
             )}
           </div>

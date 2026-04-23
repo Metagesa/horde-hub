@@ -1,31 +1,9 @@
-import type { GameConfig, GameTable, ParsedMatch } from "@/types";
+import type { ParsedMatch } from "@/types";
 
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbwcmcsrOj7K28SPkiBNpDvcZlTslMxzNM2APiN5XYDwrvkJcjnwK3cspym4XcQ-HQfm/exec";
-
-type RawGame = {
-  gameId: string;
-  displayName?: string;
-  logo?: string;
-  backgroundImage?: string;
-  matchSize?: string;
-  estimatedDuration?: string;
-};
-
-type RawFaction = {
-  gameId: string;
-  faction: string;
-  image: string;
-  color: string;
-};
-
-type RawTable = {
-  tableId?: string;
-  size?: string;
-  enabled?: boolean | string;
-  columnIndex?: number | string;
-  label?: string;
-};
+const READ_TIMEOUT_MS = 8_000;
+const WRITE_TIMEOUT_MS = 10_000;
 
 type RawMatch = {
   id: string | number;
@@ -46,7 +24,6 @@ type RawMatch = {
   played?: boolean | string;
   status?: string;
   createdAt?: string;
-  gameId?: string;
 };
 
 type MatchPayload = Partial<ParsedMatch> & {
@@ -60,14 +37,15 @@ function hasResultData(match: {
   playerBTime?: string;
 }): boolean {
   return (
-    match.scoreA !== "" &&
-    match.scoreA !== null &&
-    match.scoreA !== undefined
-  ) || (
-    match.scoreB !== "" &&
-    match.scoreB !== null &&
-    match.scoreB !== undefined
-  ) || Boolean(String(match.playerATime || "").trim()) || Boolean(String(match.playerBTime || "").trim());
+    (match.scoreA !== "" &&
+      match.scoreA !== null &&
+      match.scoreA !== undefined) ||
+    (match.scoreB !== "" &&
+      match.scoreB !== null &&
+      match.scoreB !== undefined) ||
+    Boolean(String(match.playerATime || "").trim()) ||
+    Boolean(String(match.playerBTime || "").trim())
+  );
 }
 
 function deriveMatchState(match: {
@@ -99,7 +77,10 @@ function normalizeStatus(value: unknown, played: boolean): string {
 }
 
 function normalizeDate(date?: string): string {
-  if (!date) return "";
+  if (!date) {
+    return "";
+  }
+
   return date.includes("T") ? date.split("T")[0] : date;
 }
 
@@ -127,14 +108,12 @@ function parseColonParts(value?: string): number[] | null {
 }
 
 function normalizeTimeOfDay(value?: string): string {
-  if (!value) return "";
-
-  const parts = parseColonParts(value);
-  if (parts?.length === 3) {
-    return `${padClockSegment(parts[0])}:${padClockSegment(parts[1])}`;
+  if (!value) {
+    return "";
   }
 
-  if (parts?.length === 2) {
+  const parts = parseColonParts(value);
+  if (parts?.length === 3 || parts?.length === 2) {
     return `${padClockSegment(parts[0])}:${padClockSegment(parts[1])}`;
   }
 
@@ -158,11 +137,7 @@ function normalizeDuration(value?: string): string {
   }
 
   const parts = parseColonParts(value);
-  if (parts?.length === 3) {
-    return `${padClockSegment(parts[0])}:${padClockSegment(parts[1])}`;
-  }
-
-  if (parts?.length === 2) {
+  if (parts?.length === 3 || parts?.length === 2) {
     return `${padClockSegment(parts[0])}:${padClockSegment(parts[1])}`;
   }
 
@@ -205,31 +180,37 @@ function normalizePlayed(value: unknown): boolean {
   );
 }
 
-function normalizeEnabled(value: unknown): boolean {
-  if (value === undefined || value === null || value === "") {
-    return true;
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = READ_TIMEOUT_MS
+) {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("La solicitud tardo demasiado");
+    }
+
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
+}
+
+async function parseSuccessResponse(res: Response): Promise<boolean> {
+  if (!res.ok) {
+    return false;
   }
 
-  return value !== false && value !== "false" && value !== "FALSE";
-}
-
-function normalizeColumnIndex(value: unknown, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function buildTableLabels(tables: Array<Omit<GameTable, "label">>): GameTable[] {
-  const counters: Record<string, number> = {};
-
-  return tables.map((table) => {
-    const nextCount = (counters[table.size] || 0) + 1;
-    counters[table.size] = nextCount;
-
-    return {
-      ...table,
-      label: `${table.size} #${nextCount}`,
-    };
-  });
+  const data = (await res.json()) as { success?: unknown };
+  return Boolean(data.success);
 }
 
 export function parseMatch(raw: RawMatch): ParsedMatch {
@@ -269,59 +250,12 @@ export function parseMatch(raw: RawMatch): ParsedMatch {
   };
 }
 
-export async function fetchConfigs(): Promise<GameConfig[]> {
-  const [gamesRes, factionsRes] = await Promise.all([
-    fetch(`${APPS_SCRIPT_URL}?type=games`),
-    fetch(`${APPS_SCRIPT_URL}?type=factions`),
-  ]);
-
-  if (!gamesRes.ok) {
-    throw new Error("No se pudo cargar Config");
-  }
-  if (!factionsRes.ok) {
-    throw new Error("No se pudo cargar Facciones");
-  }
-
-  const games: RawGame[] = await gamesRes.json();
-  const factions: RawFaction[] = await factionsRes.json();
-
-  return games.map((game) => {
-    const gameFactions = factions.filter((f) => f.gameId === game.gameId);
-
-    return {
-      gameId: game.gameId,
-      displayName: game.displayName || game.gameId,
-      logo: game.logo || "",
-      matchSize: game.matchSize || "",
-      estimatedDuration: normalizeDuration(game.estimatedDuration) || "01:30",
-      backgroundImage: game.backgroundImage || "",
-      factions: gameFactions.map((f) => f.faction),
-      factionImages: Object.fromEntries(
-        gameFactions.map((f) => [f.faction, f.image])
-      ),
-      factionColors: Object.fromEntries(
-        gameFactions.map((f) => [f.faction, f.color])
-      ),
-    };
-  });
-}
-
-export async function fetchFactions(gameId: string): Promise<RawFaction[]> {
-  const res = await fetch(
-    `${APPS_SCRIPT_URL}?type=factions&gameId=${encodeURIComponent(gameId)}`
-  );
-  if (!res.ok) {
-    throw new Error("No se pudieron cargar las facciones");
-  }
-  return res.json();
-}
-
 export async function fetchMatches(gameId?: string): Promise<ParsedMatch[]> {
   if (!gameId) {
     return [];
   }
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `${APPS_SCRIPT_URL}?type=matches&gameId=${encodeURIComponent(gameId)}`
   );
   if (!res.ok) {
@@ -334,66 +268,20 @@ export async function fetchMatches(gameId?: string): Promise<ParsedMatch[]> {
     .filter((match) => match.playerA && match.date && match.time);
 }
 
-export async function fetchTables(): Promise<GameTable[]> {
-  try {
-    const res = await fetch(`${APPS_SCRIPT_URL}?type=tables`);
-    if (!res.ok) {
-      throw new Error("No se pudieron cargar los tablones");
-    }
-
-    const data: RawTable[] = await res.json();
-    const physicalTables = data
-      .map((table, index) => {
-        const size = table.size || "";
-        const columnIndex = normalizeColumnIndex(table.columnIndex, index + 2);
-        const tableId = table.tableId || String(columnIndex);
-
-        return {
-          tableId,
-          size,
-          columnIndex,
-          enabled: normalizeEnabled(table.enabled),
-        };
-      })
-      .filter((table) => table.size && table.enabled)
-      .sort((a, b) => a.columnIndex - b.columnIndex);
-
-    return buildTableLabels(physicalTables);
-  } catch {
-    return [];
-  }
-}
-
-export async function fetchTableTimeSlots(): Promise<string[]> {
-  try {
-    const res = await fetch(`${APPS_SCRIPT_URL}?type=tableTimes`);
-    if (!res.ok) {
-      throw new Error("No se pudieron cargar los horarios de tablones");
-    }
-
-    const data: unknown = await res.json();
-    return Array.isArray(data)
-      ? Array.from(
-          new Set(
-            data
-              .map((item) => normalizeTimeOfDay(String(item || "")))
-              .filter(Boolean)
-          )
-        )
-      : [];
-  } catch {
-    return [];
-  }
-}
-
 export async function fetchAllMatches(
   gameIds: string[]
 ): Promise<Record<string, ParsedMatch[]>> {
-  const matchesByGame = await Promise.all(
-    gameIds.map(async (gameId) => [gameId, await fetchMatches(gameId)] as const)
+  const uniqueGameIds = [...new Set(gameIds)].filter(Boolean);
+  const matchesByGame = await Promise.allSettled(
+    uniqueGameIds.map(async (gameId) => [gameId, await fetchMatches(gameId)] as const)
   );
 
-  return Object.fromEntries(matchesByGame);
+  return Object.fromEntries(
+    matchesByGame.map((result, index) => {
+      const gameId = uniqueGameIds[index];
+      return result.status === "fulfilled" ? result.value : [gameId, []];
+    })
+  );
 }
 
 function buildMatchPayload(gameId: string, match: MatchPayload) {
@@ -429,20 +317,23 @@ export async function saveMatch(
   match: MatchPayload
 ): Promise<boolean> {
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify(
-        buildMatchPayload(gameId, {
-          ...match,
-          played: match.played ?? false,
-          reserveTable: match.reserveTable ?? Boolean(match.tableId),
-        })
-      ),
-    });
+    const res = await fetchWithTimeout(
+      APPS_SCRIPT_URL,
+      {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(
+          buildMatchPayload(gameId, {
+            ...match,
+            played: match.played ?? false,
+            reserveTable: match.reserveTable ?? Boolean(match.tableId),
+          })
+        ),
+      },
+      WRITE_TIMEOUT_MS
+    );
 
-    const data = await res.json();
-    return !!data.success;
+    return parseSuccessResponse(res);
   } catch {
     return false;
   }
@@ -457,23 +348,26 @@ export async function updateMatchResult(
   playerBTime: string
 ): Promise<boolean> {
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify(
-        buildMatchPayload(gameId, {
-          ...match,
-          scoreA,
-          scoreB,
-          playerATime,
-          playerBTime,
-          reserveTable: Boolean(match.tableId),
-        })
-      ),
-    });
+    const res = await fetchWithTimeout(
+      APPS_SCRIPT_URL,
+      {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(
+          buildMatchPayload(gameId, {
+            ...match,
+            scoreA,
+            scoreB,
+            playerATime,
+            playerBTime,
+            reserveTable: Boolean(match.tableId),
+          })
+        ),
+      },
+      WRITE_TIMEOUT_MS
+    );
 
-    const data = await res.json();
-    return !!data.success;
+    return parseSuccessResponse(res);
   } catch {
     return false;
   }
@@ -484,20 +378,21 @@ export async function deleteMatch(
   matchId: string
 ): Promise<boolean> {
   try {
-    const payload = {
-      gameId,
-      action: "delete",
-      id: matchId,
-    };
+    const res = await fetchWithTimeout(
+      APPS_SCRIPT_URL,
+      {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({
+          gameId,
+          action: "delete",
+          id: matchId,
+        }),
+      },
+      WRITE_TIMEOUT_MS
+    );
 
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json();
-    return !!data.success;
+    return parseSuccessResponse(res);
   } catch {
     return false;
   }

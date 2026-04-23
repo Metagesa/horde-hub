@@ -1,13 +1,8 @@
 import { Navigate } from "react-router-dom";
 import { useConfigs } from "@/hooks/useGameData";
-import { SiteLoading } from "@/components/SiteLoading";
 
 export default function Index() {
-  const { data: configs, isLoading } = useConfigs();
-
-  if (isLoading) {
-    return <SiteLoading />;
-  }
+  const { data: configs } = useConfigs();
 
   if (configs && configs.length > 0) {
     return <Navigate to={`/game/${configs[0].gameId}`} replace />;

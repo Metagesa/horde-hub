@@ -1,6 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { toPng } from "html-to-image";
 import { useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, LayoutGrid, Menu, ScrollText, Trophy } from "lucide-react";
 import { deleteMatch } from "@/lib/api";
@@ -20,37 +19,48 @@ import {
   isPastDate,
 } from "@/lib/dates";
 import MatchCard from "@/components/MatchCard";
-import { RegistrationForm } from "@/components/RegistrationForm";
 import { SiteLoading } from "@/components/SiteLoading";
-import { BoardsHeatmap } from "@/components/BoardsHeatmap";
-import { MatchEditorModal } from "@/components/MatchEditorModal";
-import { ResultModal } from "@/components/ResultModal";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import type { ParsedMatch } from "@/types";
 
-const proxyImage = (url?: string) => {
-  if (!url) return "";
-  if (url.startsWith("http")) {
-    return `https://wsrv.nl/?url=${encodeURIComponent(url)}`;
-  }
-  return url;
-};
+const RegistrationForm = lazy(async () => {
+  const module = await import("@/components/RegistrationForm");
+  return { default: module.RegistrationForm };
+});
+
+const BoardsHeatmap = lazy(async () => {
+  const module = await import("@/components/BoardsHeatmap");
+  return { default: module.BoardsHeatmap };
+});
+
+const MatchEditorModal = lazy(async () => {
+  const module = await import("@/components/MatchEditorModal");
+  return { default: module.MatchEditorModal };
+});
+
+const ResultModal = lazy(async () => {
+  const module = await import("@/components/ResultModal");
+  return { default: module.ResultModal };
+});
+
+function DeferredPanelLoading({ message }: { message: string }) {
+  return (
+    <div className="site-panel glass-surface rounded-[28px] px-4 py-8 text-center sm:px-5">
+      <p className="text-sm text-muted-foreground">{message}</p>
+    </div>
+  );
+}
 
 export default function GamePage() {
   const { gameId } = useParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: configs, isLoading: configsLoading } = useConfigs();
-  const { data: matches = [], isLoading: matchesLoading } = useMatches(gameId);
+  const { data: configs } = useConfigs();
   const { data: factions = [] } = useFactions(gameId);
   const { data: tables = [] } = useTables();
   const { data: tableTimeSlots = [] } = useTableTimeSlots();
-  const { data: allMatches = {} } = useAllMatches(
-    configs?.map((config) => config.gameId) || []
-  );
 
-  const config = configs?.find((item) => item.gameId === gameId);
   const [tab, setTab] = useState<"agenda" | "registro" | "mesas" | "resultados">(
     "agenda"
   );
@@ -61,9 +71,41 @@ export default function GamePage() {
   const [selectedResultMatch, setSelectedResultMatch] =
     useState<ParsedMatch | null>(null);
   const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
+  const needsCrossGameMatches =
+    tab === "registro" || tab === "mesas" || selectedEditMatch !== null;
+  const {
+    data: matches = [],
+    isLoading: matchesLoading,
+    error: matchesError,
+  } = useMatches(gameId, { refetchInterval: 60_000 });
 
   const upcomingRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const config = configs.find((item) => item.gameId === gameId);
+  const otherGameIds = useMemo(
+    () =>
+      configs
+        .map((item) => item.gameId)
+        .filter((configGameId) => configGameId !== gameId),
+    [configs, gameId]
+  );
+  const {
+    data: otherMatches = {},
+    isLoading: allMatchesLoading,
+  } = useAllMatches(otherGameIds, {
+    enabled: needsCrossGameMatches,
+    refetchInterval: needsCrossGameMatches ? 60_000 : false,
+  });
+  const allMatches = useMemo(
+    () =>
+      gameId
+        ? {
+            [gameId]: matches,
+            ...otherMatches,
+          }
+        : otherMatches,
+    [gameId, matches, otherMatches]
+  );
 
   const gameMatchesForSelectedDate = useMemo(
     () =>
@@ -105,6 +147,10 @@ export default function GamePage() {
   }, [matches, tableTimeSlots]);
 
   const selectedDateIsPast = isPastDate(selectedDate);
+  const matchesErrorMessage =
+    matchesError instanceof Error
+      ? matchesError.message
+      : "No se pudieron cargar los partidos.";
 
   const refresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["matches", gameId] });
@@ -117,6 +163,7 @@ export default function GamePage() {
   ) => {
     if (!ref.current) return;
 
+    const { toPng } = await import("html-to-image");
     const dataUrl = await toPng(ref.current, { pixelRatio: 3 });
     const link = document.createElement("a");
     link.download = name;
@@ -149,20 +196,14 @@ export default function GamePage() {
     [gameId, refresh, toast]
   );
 
-  if (configsLoading || (!config && matchesLoading)) {
-    return (
-      <SiteLoading message="Si tarda mucho, probablemente algo no este configurado correctamente. Contacta al administrador para solucionarlo." />
-    );
-  }
-
   if (!config) {
     return (
       <SiteLoading message="Si tarda mucho, probablemente algo no este configurado correctamente. Contacta al administrador para solucionarlo." />
     );
   }
 
-  const gameLogo = proxyImage(config.logo);
-  const gameBackground = proxyImage(config.backgroundImage);
+  const gameLogo = config.logo;
+  const gameBackground = config.backgroundImage;
   const mobileNavItems = [
     { id: "agenda", label: "Agenda", icon: CalendarDays },
     { id: "registro", label: "Registro", icon: ScrollText },
@@ -173,6 +214,9 @@ export default function GamePage() {
   const openMobileSidebar = () => {
     window.dispatchEvent(new Event("open-mobile-sidebar"));
   };
+
+  const reservationDataPending =
+    needsCrossGameMatches && (matchesLoading || allMatchesLoading);
 
   return (
     <div className="relative px-4 py-6 sm:px-6 sm:py-8">
@@ -194,7 +238,7 @@ export default function GamePage() {
               <div className="flex sm:hidden">
                 <div className="flex shrink-0 items-center gap-2 rounded-full border border-red-500/20 bg-black/30 px-2.5 py-1.5">
                   <img
-                    src="/images/logoclub.png"
+                    src="/images/logoclub.webp"
                     alt="Horda de Plata"
                     className="h-6 w-6 object-contain"
                   />
@@ -216,7 +260,7 @@ export default function GamePage() {
                     />
                   ) : (
                     <img
-                      src="/images/logoclub.png"
+                      src="/images/logoclub.webp"
                       alt="Horda de Plata"
                       className="h-8 w-8 object-contain"
                     />
@@ -232,7 +276,7 @@ export default function GamePage() {
 
               <div className="hidden shrink-0 items-center gap-2 rounded-full border border-red-500/20 bg-black/30 px-2.5 py-1.5 sm:flex sm:gap-3 sm:px-3 sm:py-2">
                 <img
-                  src="/images/logoclub.png"
+                  src="/images/logoclub.webp"
                   alt="Horda de Plata"
                   className="h-6 w-6 object-contain sm:h-8 sm:w-8"
                 />
@@ -302,6 +346,12 @@ export default function GamePage() {
           </div>
         </section>
 
+        {matchesError ? (
+          <section className="rounded-[24px] border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            {matchesErrorMessage}
+          </section>
+        ) : null}
+
         {tab === "agenda" && (
           <section className="flex flex-col gap-4">
             <div className="flex flex-wrap gap-3">
@@ -317,55 +367,79 @@ export default function GamePage() {
               </Button>
             </div>
 
-            <div className="mx-auto w-full max-w-[450px]">
-              <MatchCard
-                ref={upcomingRef}
-                matches={scheduledMatchesForSelectedDate}
-                dateLabel={
-                  selectedDate
-                    ? `Partidos para el viernes ${formatDateSpanish(selectedDate)}`
-                    : "Sin fecha cargada"
-                }
-                title="PARTIDOS PROGRAMADOS"
-                logoUrl={config.logo}
-                backgroundUrl={config.backgroundImage}
-                factions={factions}
-                onEdit={(match) => setSelectedEditMatch(match)}
-                onResult={(match) => setSelectedResultMatch(match)}
-                onDelete={(match) =>
-                  busyMatchId === match.id ? undefined : handleDelete(match)
-                }
-              />
-            </div>
+            {matchesLoading && matches.length === 0 ? (
+              <DeferredPanelLoading message="Cargando agenda..." />
+            ) : (
+              <div className="mx-auto w-full max-w-[450px]">
+                <MatchCard
+                  ref={upcomingRef}
+                  matches={scheduledMatchesForSelectedDate}
+                  dateLabel={
+                    selectedDate
+                      ? `Partidos para el viernes ${formatDateSpanish(selectedDate)}`
+                      : "Sin fecha cargada"
+                  }
+                  title="PARTIDOS PROGRAMADOS"
+                  logoUrl={config.logo}
+                  backgroundUrl={config.backgroundImage}
+                  factions={factions}
+                  onEdit={(match) => setSelectedEditMatch(match)}
+                  onResult={(match) => setSelectedResultMatch(match)}
+                  onDelete={(match) =>
+                    busyMatchId === match.id ? undefined : handleDelete(match)
+                  }
+                />
+              </div>
+            )}
           </section>
         )}
 
         {tab === "registro" && (
           <section className="mx-auto w-full max-w-lg fade-in">
-            <RegistrationForm
-              gameId={gameId!}
-              config={config}
-              factions={factions}
-              tables={tables}
-              timeSlots={effectiveTimeSlots}
-              allMatches={allMatches}
-              onSuccess={refresh}
-              forcedDate={selectedDate}
-              disabled={selectedDateIsPast}
-              disabledMessage="Las reservas y nuevas partidas no se gestionan desde viernes pasados."
-            />
+            {reservationDataPending ? (
+              <SiteLoading message="Cargando disponibilidad de tablones..." />
+            ) : (
+              <Suspense
+                fallback={
+                  <DeferredPanelLoading message="Cargando registro de partidas..." />
+                }
+              >
+                <RegistrationForm
+                  gameId={gameId!}
+                  config={config}
+                  factions={factions}
+                  tables={tables}
+                  timeSlots={effectiveTimeSlots}
+                  allMatches={allMatches}
+                  onSuccess={refresh}
+                  forcedDate={selectedDate}
+                  disabled={selectedDateIsPast}
+                  disabledMessage="Las reservas y nuevas partidas no se gestionan desde viernes pasados."
+                />
+              </Suspense>
+            )}
           </section>
         )}
 
         {tab === "mesas" && (
-          <BoardsHeatmap
-            tables={tables}
-            allMatches={allMatches}
-            configs={configs || []}
-            selectedDate={selectedDate}
-            timeSlots={effectiveTimeSlots}
-            disabled={selectedDateIsPast}
-          />
+          reservationDataPending ? (
+            <SiteLoading message="Cargando disponibilidad de tablones..." />
+          ) : (
+            <Suspense
+              fallback={
+                <DeferredPanelLoading message="Cargando disponibilidad de tablones..." />
+              }
+            >
+              <BoardsHeatmap
+                tables={tables}
+                allMatches={allMatches}
+                configs={configs}
+                selectedDate={selectedDate}
+                timeSlots={effectiveTimeSlots}
+                disabled={selectedDateIsPast}
+              />
+            </Suspense>
+          )
         )}
 
         {tab === "resultados" && (
@@ -385,50 +459,66 @@ export default function GamePage() {
               </Button>
             </div>
 
-            <div className="mx-auto w-full max-w-[450px]">
-              <MatchCard
-                ref={resultsRef}
-                matches={resultsForSelectedDate}
-                dateLabel={
-                  selectedDate
-                    ? `Resultados del ${formatDateSpanish(selectedDate)}`
-                    : "Sin fecha cargada"
-                }
-                title="RESULTADOS"
-                logoUrl={config.logo}
-                backgroundUrl={config.backgroundImage}
-                factions={factions}
-                onEdit={(match) => setSelectedEditMatch(match)}
-                onResult={(match) => setSelectedResultMatch(match)}
-                onDelete={(match) =>
-                  busyMatchId === match.id ? undefined : handleDelete(match)
-                }
-              />
-            </div>
+            {matchesLoading && matches.length === 0 ? (
+              <DeferredPanelLoading message="Cargando resultados..." />
+            ) : (
+              <div className="mx-auto w-full max-w-[450px]">
+                <MatchCard
+                  ref={resultsRef}
+                  matches={resultsForSelectedDate}
+                  dateLabel={
+                    selectedDate
+                      ? `Resultados del ${formatDateSpanish(selectedDate)}`
+                      : "Sin fecha cargada"
+                  }
+                  title="RESULTADOS"
+                  logoUrl={config.logo}
+                  backgroundUrl={config.backgroundImage}
+                  factions={factions}
+                  onEdit={(match) => setSelectedEditMatch(match)}
+                  onResult={(match) => setSelectedResultMatch(match)}
+                  onDelete={(match) =>
+                    busyMatchId === match.id ? undefined : handleDelete(match)
+                  }
+                />
+              </div>
+            )}
           </section>
         )}
 
         {selectedEditMatch && gameId && (
-          <MatchEditorModal
-            match={selectedEditMatch}
-            gameId={gameId}
-            config={config}
-            factions={factions}
-            tables={tables}
-            timeSlots={effectiveTimeSlots}
-            allMatches={allMatches}
-            onClose={() => setSelectedEditMatch(null)}
-            onSuccess={refresh}
-          />
+          reservationDataPending ? (
+            <SiteLoading message="Cargando disponibilidad de tablones..." />
+          ) : (
+            <Suspense
+              fallback={<SiteLoading message="Cargando editor de partidas..." />}
+            >
+              <MatchEditorModal
+                match={selectedEditMatch}
+                gameId={gameId}
+                config={config}
+                factions={factions}
+                tables={tables}
+                timeSlots={effectiveTimeSlots}
+                allMatches={allMatches}
+                onClose={() => setSelectedEditMatch(null)}
+                onSuccess={refresh}
+              />
+            </Suspense>
+          )
         )}
 
         {selectedResultMatch && gameId && (
-          <ResultModal
-            match={selectedResultMatch}
-            gameId={gameId}
-            onClose={() => setSelectedResultMatch(null)}
-            onSuccess={refresh}
-          />
+          <Suspense
+            fallback={<SiteLoading message="Cargando carga de resultados..." />}
+          >
+            <ResultModal
+              match={selectedResultMatch}
+              gameId={gameId}
+              onClose={() => setSelectedResultMatch(null)}
+              onSuccess={refresh}
+            />
+          </Suspense>
         )}
       </div>
     </div>
