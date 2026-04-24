@@ -1,7 +1,13 @@
 import { forwardRef, useState } from "react";
-import { Edit2, Trash2, Trophy } from "lucide-react";
+import { Edit2, MoreHorizontal, Trash2, Trophy } from "lucide-react";
 import type { ParsedMatch } from "@/types";
 import { clubLogoUrl, getPublicAssetPath } from "@/lib/assets";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface MatchCardProps {
   matches: ParsedMatch[];
@@ -13,6 +19,7 @@ interface MatchCardProps {
   onEdit?: (match: ParsedMatch) => void;
   onResult?: (match: ParsedMatch) => void;
   onDelete?: (match: ParsedMatch) => void;
+  actionMode?: "bar" | "menu";
 }
 
 function FactionBadge({
@@ -94,8 +101,12 @@ function MatchRow({
   onEdit,
   onResult,
   onDelete,
+  actionMode,
   isMobileActionsOpen,
   onToggleMobileActions,
+  isActionMenuOpen,
+  onActionMenuOpenChange,
+  onAction,
 }: {
   match: ParsedMatch;
   imagesMap: Record<string, string>;
@@ -103,13 +114,18 @@ function MatchRow({
   onEdit?: () => void;
   onResult?: () => void;
   onDelete?: () => void;
+  actionMode: "bar" | "menu";
   isMobileActionsOpen: boolean;
   onToggleMobileActions?: () => void;
+  isActionMenuOpen: boolean;
+  onActionMenuOpenChange?: (open: boolean) => void;
+  onAction?: () => void;
 }) {
   const showActions = onEdit || onResult || onDelete;
   const winner = getWinner(match);
+  const useCompactActionMenu = actionMode === "menu";
   const rowClassName = `group relative flex items-center w-full bg-black/70 backdrop-blur-md border overflow-hidden transition-colors ${
-    isMobileActionsOpen
+    isMobileActionsOpen || isActionMenuOpen
       ? "border-white/30"
       : "border-white/10 hover:border-white/30"
   }`;
@@ -122,10 +138,19 @@ function MatchRow({
     action?.();
   };
 
+  const triggerLabel = `Abrir acciones del partido ${match.playerA} contra ${match.playerB || "?"}`;
+  const handleMenuAction = (action?: () => void) => {
+    onActionMenuOpenChange?.(false);
+    onAction?.();
+    action?.();
+  };
+
   return (
     <div
       className={rowClassName}
-      onClick={showActions ? onToggleMobileActions : undefined}
+      onClick={
+        showActions && !useCompactActionMenu ? onToggleMobileActions : undefined
+      }
     >
       <div className="flex flex-1 items-center justify-start gap-1.5 sm:gap-2">
         <FactionBadge
@@ -167,7 +192,11 @@ function MatchRow({
         )}
       </div>
 
-      <div className="flex flex-1 items-center justify-end gap-1.5 sm:gap-2">
+      <div
+        className={`flex flex-1 items-center justify-end gap-1.5 sm:gap-2 ${
+          useCompactActionMenu && showActions ? "pr-12 md:pr-36" : ""
+        }`}
+      >
         <span
           className={`max-w-[70px] truncate text-right text-xs font-black uppercase tracking-wide sm:max-w-[90px] sm:text-sm ${getPlayerClass(
             winner === "B"
@@ -183,7 +212,96 @@ function MatchRow({
         />
       </div>
 
-      {showActions ? (
+      {showActions && useCompactActionMenu ? (
+        <>
+          <div className="absolute right-2 top-1/2 z-10 hidden -translate-y-1/2 items-center gap-1 rounded-full border border-white/15 bg-black/75 px-1 py-1 backdrop-blur-sm transition-opacity md:flex md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+            {onResult && (
+              <button
+                type="button"
+                onClick={(event) => handleActionClick(event, onResult)}
+                className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-black/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-300 hover:text-white"
+                title="Puntuar partido"
+              >
+                <Trophy size={11} />
+                Puntuar
+              </button>
+            )}
+
+            {onEdit && (
+              <button
+                type="button"
+                onClick={(event) => handleActionClick(event, onEdit)}
+                className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-200 hover:text-white"
+                title="Editar partido"
+              >
+                <Edit2 size={11} />
+                Editar
+              </button>
+            )}
+
+            {onDelete && (
+              <button
+                type="button"
+                onClick={(event) => handleActionClick(event, onDelete)}
+                className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-black/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-red-300 hover:text-white"
+                title="Borrar partido"
+              >
+                <Trash2 size={11} />
+                Borrar
+              </button>
+            )}
+          </div>
+
+          <DropdownMenu
+            open={isActionMenuOpen}
+            onOpenChange={onActionMenuOpenChange}
+          >
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={triggerLabel}
+                className="absolute right-2 top-2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/75 text-gray-200 backdrop-blur-sm transition hover:border-white/30 hover:text-white md:top-1/2 md:-translate-y-1/2"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <MoreHorizontal size={16} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={8}
+              className="min-w-[10rem] border-white/10 bg-slate-950/95 text-gray-100 backdrop-blur"
+            >
+              {onResult && (
+                <DropdownMenuItem
+                  onSelect={() => handleMenuAction(onResult)}
+                  className="gap-2"
+                >
+                  <Trophy size={14} className="text-amber-300" />
+                  Puntuar
+                </DropdownMenuItem>
+              )}
+              {onEdit && (
+                <DropdownMenuItem
+                  onSelect={() => handleMenuAction(onEdit)}
+                  className="gap-2"
+                >
+                  <Edit2 size={14} className="text-gray-200" />
+                  Editar
+                </DropdownMenuItem>
+              )}
+              {onDelete && (
+                <DropdownMenuItem
+                  onSelect={() => handleMenuAction(onDelete)}
+                  className="gap-2 text-red-300 focus:text-red-200"
+                >
+                  <Trash2 size={14} />
+                  Borrar
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      ) : showActions ? (
         <>
           <div
             className={`absolute inset-x-0 bottom-0 justify-center gap-2 bg-black/75 px-2 py-2 md:hidden ${
@@ -282,6 +400,7 @@ const MatchCard = forwardRef<HTMLDivElement, MatchCardProps>(
       onEdit,
       onResult,
       onDelete,
+      actionMode = "bar",
     },
     ref
   ) => {
@@ -290,6 +409,9 @@ const MatchCard = forwardRef<HTMLDivElement, MatchCardProps>(
     const [mobileActionsMatchId, setMobileActionsMatchId] = useState<
       string | null
     >(null);
+    const [openActionMatchId, setOpenActionMatchId] = useState<string | null>(
+      null
+    );
 
     factions.forEach((faction) => {
       if (faction.faction) {
@@ -378,12 +500,25 @@ const MatchCard = forwardRef<HTMLDivElement, MatchCardProps>(
                     onEdit={onEdit ? () => onEdit(match) : undefined}
                     onResult={onResult ? () => onResult(match) : undefined}
                     onDelete={onDelete ? () => onDelete(match) : undefined}
-                    isMobileActionsOpen={mobileActionsMatchId === match.id}
-                    onToggleMobileActions={() =>
+                    actionMode={actionMode}
+                    isMobileActionsOpen={
+                      actionMode === "bar" && mobileActionsMatchId === match.id
+                    }
+                    onToggleMobileActions={() => {
+                      setOpenActionMatchId(null);
                       setMobileActionsMatchId((currentId) =>
                         currentId === match.id ? null : match.id
-                      )
-                    }
+                      );
+                    }}
+                    isActionMenuOpen={openActionMatchId === match.id}
+                    onActionMenuOpenChange={(open) => {
+                      setMobileActionsMatchId(null);
+                      setOpenActionMatchId(open ? match.id : null);
+                    }}
+                    onAction={() => {
+                      setMobileActionsMatchId(null);
+                      setOpenActionMatchId(null);
+                    }}
                   />
                 ))
               )}

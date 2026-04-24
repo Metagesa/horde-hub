@@ -20,6 +20,16 @@ import {
 import { clubLogoUrl } from "@/lib/assets";
 import MatchCard from "@/components/MatchCard";
 import { SiteLoading } from "@/components/SiteLoading";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { getStoredAdminSession } from "@/lib/adminAuth";
@@ -69,6 +79,9 @@ export default function GamePage() {
   );
   const [selectedResultMatch, setSelectedResultMatch] =
     useState<ParsedMatch | null>(null);
+  const [pendingDeleteMatch, setPendingDeleteMatch] = useState<ParsedMatch | null>(
+    null
+  );
   const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
   const selectedDateIsPast = isPastDate(selectedDate);
   const adminSession = getStoredAdminSession();
@@ -171,29 +184,38 @@ export default function GamePage() {
   };
 
   const handleDelete = useCallback(
-    async (match: ParsedMatch) => {
-      if (!gameId || !window.confirm("Eliminar partido?")) {
+    (match: ParsedMatch) => {
+      if (!gameId) {
         return;
       }
 
-      setBusyMatchId(match.id);
-      const success = await deleteMatch(gameId, match.id);
-      setBusyMatchId(null);
-
-      if (success) {
-        toast({ title: "Partido eliminado" });
-        refresh();
-        return;
-      }
-
-      toast({
-        title: "Error",
-        description: "No se pudo eliminar el partido",
-        variant: "destructive",
-      });
+      setPendingDeleteMatch(match);
     },
-    [gameId, refresh, toast]
+    [gameId]
   );
+
+  const confirmDelete = useCallback(async () => {
+    if (!gameId || !pendingDeleteMatch) {
+      return;
+    }
+
+    setBusyMatchId(pendingDeleteMatch.id);
+    const success = await deleteMatch(gameId, pendingDeleteMatch.id);
+    setBusyMatchId(null);
+
+    if (success) {
+      toast({ title: "Partido eliminado" });
+      setPendingDeleteMatch(null);
+      refresh();
+      return;
+    }
+
+    toast({
+      title: "Error",
+      description: "No se pudo eliminar el partido",
+      variant: "destructive",
+    });
+  }, [gameId, pendingDeleteMatch, refresh, toast]);
 
   if (!config) {
     return (
@@ -390,6 +412,7 @@ export default function GamePage() {
                   logoUrl={config.logo}
                   backgroundUrl={config.backgroundImage}
                   factions={factions}
+                  actionMode="menu"
                   onEdit={canManageMatches ? (match) => setSelectedEditMatch(match) : undefined}
                   onResult={
                     canManageMatches
@@ -541,6 +564,41 @@ export default function GamePage() {
             />
           </Suspense>
         )}
+
+        <AlertDialog
+          open={pendingDeleteMatch !== null}
+          onOpenChange={(open) => {
+            if (!open && !busyMatchId) {
+              setPendingDeleteMatch(null);
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar borrado</AlertDialogTitle>
+              <AlertDialogDescription>
+                {pendingDeleteMatch
+                  ? `Se borrara el partido de ${pendingDeleteMatch.playerA} vs ${pendingDeleteMatch.playerB || "?"} del ${formatDateSpanish(pendingDeleteMatch.date)} a las ${pendingDeleteMatch.time}.`
+                  : "Se borrara el partido seleccionado."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={Boolean(busyMatchId)}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(event) => {
+                  event.preventDefault();
+                  void confirmDelete();
+                }}
+                disabled={Boolean(busyMatchId)}
+                className="bg-red-600 text-white hover:bg-red-500"
+              >
+                {busyMatchId ? "Borrando..." : "Borrar"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
