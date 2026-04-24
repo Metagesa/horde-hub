@@ -3,6 +3,10 @@ import { useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, LayoutGrid, Menu, ScrollText, Trophy } from "lucide-react";
 import { deleteMatch } from "@/lib/api";
+import {
+  isCompletedVisibleMatch,
+  isScheduledVisibleMatch,
+} from "@/lib/matchNormalization";
 
 import {
   useBoardAvailability,
@@ -112,18 +116,12 @@ export default function GamePage() {
   );
 
   const scheduledMatchesForSelectedDate = useMemo(
-    () =>
-      gameMatchesForSelectedDate.filter(
-        (match) => !match.played && match.status !== "completed"
-      ),
+    () => gameMatchesForSelectedDate.filter(isScheduledVisibleMatch),
     [gameMatchesForSelectedDate]
   );
 
   const resultsForSelectedDate = useMemo(
-    () =>
-      gameMatchesForSelectedDate.filter(
-        (match) => match.played || match.status === "completed"
-      ),
+    () => gameMatchesForSelectedDate.filter(isCompletedVisibleMatch),
     [gameMatchesForSelectedDate]
   );
 

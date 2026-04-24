@@ -7,6 +7,10 @@ import {
   saveMatch,
 } from "@/lib/api";
 import { getStoredAdminSession, storeAdminSession } from "@/lib/adminAuth";
+import {
+  isCompletedVisibleMatch,
+  isScheduledVisibleMatch,
+} from "@/lib/matchNormalization";
 import { GAME_CONFIGS, TABLES, TABLE_TIME_SLOTS, getGameFactions } from "@/lib/localData";
 
 describe("local snapshot data", () => {
@@ -317,5 +321,85 @@ describe("match api", () => {
       date: "",
       time: "19:00",
     });
+  });
+
+  it("treats a fully registered scheduled match as agenda-visible", () => {
+    const match = parseMatch({
+      id: "11",
+      date: "2026-04-24",
+      playerA: "Alice",
+      factionA: "Alchemists",
+      playerB: "Bob",
+      factionB: "Butchers",
+      time: "19:00:00",
+    });
+
+    expect(isScheduledVisibleMatch(match)).toBe(true);
+    expect(isCompletedVisibleMatch(match)).toBe(false);
+  });
+
+  it("shows a completed fully registered match only in resultados", () => {
+    const match = parseMatch({
+      id: "12",
+      date: "2026-04-24",
+      playerA: "Alice",
+      factionA: "Alchemists",
+      playerB: "Bob",
+      factionB: "Butchers",
+      time: "19:00:00",
+      scoreA: "12",
+      scoreB: "8",
+    });
+
+    expect(isScheduledVisibleMatch(match)).toBe(false);
+    expect(isCompletedVisibleMatch(match)).toBe(true);
+  });
+
+  it("hides completed matches without player B from resultados", () => {
+    const match = parseMatch({
+      id: "13",
+      date: "2026-04-24",
+      playerA: "Alice",
+      factionA: "Alchemists",
+      playerB: "",
+      factionB: "",
+      time: "19:00:00",
+      scoreA: "12",
+      scoreB: "8",
+    });
+
+    expect(isCompletedVisibleMatch(match)).toBe(false);
+  });
+
+  it("hides completed matches without a valid date from resultados", () => {
+    const match = parseMatch({
+      id: "14",
+      date: "",
+      playerA: "Alice",
+      factionA: "Alchemists",
+      playerB: "Bob",
+      factionB: "Butchers",
+      time: "19:00:00",
+      scoreA: "12",
+      scoreB: "8",
+    });
+
+    expect(isCompletedVisibleMatch(match)).toBe(false);
+  });
+
+  it("hides completed matches without a valid time from resultados", () => {
+    const match = parseMatch({
+      id: "15",
+      date: "2026-04-24",
+      playerA: "Alice",
+      factionA: "Alchemists",
+      playerB: "Bob",
+      factionB: "Butchers",
+      time: "",
+      scoreA: "12",
+      scoreB: "8",
+    });
+
+    expect(isCompletedVisibleMatch(match)).toBe(false);
   });
 });

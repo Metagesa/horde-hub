@@ -211,6 +211,32 @@ export function normalizePlayed(value: unknown): boolean {
   );
 }
 
+export function isVisibleRegisteredMatch(match: ParsedMatch): boolean {
+  return Boolean(
+    String(match.date || "").trim() &&
+      String(match.time || "").trim() &&
+      String(match.playerA || "").trim() &&
+      String(match.playerB || "").trim()
+  );
+}
+
+export function isScheduledVisibleMatch(match: ParsedMatch): boolean {
+  return (
+    isVisibleRegisteredMatch(match) &&
+    !match.played &&
+    match.status !== "completed" &&
+    match.status !== "cancelled"
+  );
+}
+
+export function isCompletedVisibleMatch(match: ParsedMatch): boolean {
+  return (
+    isVisibleRegisteredMatch(match) &&
+    match.status !== "cancelled" &&
+    (match.played || match.status === "completed")
+  );
+}
+
 export function parseMatch(raw: RawMatch): ParsedMatch {
   const playerATime = normalizePlayerClock(raw.playerATime);
   const playerBTime = normalizePlayerClock(raw.playerBTime);
