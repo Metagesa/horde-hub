@@ -3,10 +3,7 @@ import { useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, LayoutGrid, Menu, ScrollText, Trophy } from "lucide-react";
 import { deleteMatch } from "@/lib/api";
-import {
-  isCompletedVisibleMatch,
-  isScheduledVisibleMatch,
-} from "@/lib/matchNormalization";
+import { isCompletedVisibleMatch } from "@/lib/matchNormalization";
 
 import {
   useBoardAvailability,
@@ -113,11 +110,6 @@ export default function GamePage() {
         .filter((match) => !selectedDate || match.date === selectedDate)
         .sort((a, b) => a.time.localeCompare(b.time)),
     [matches, selectedDate]
-  );
-
-  const scheduledMatchesForSelectedDate = useMemo(
-    () => gameMatchesForSelectedDate.filter(isScheduledVisibleMatch),
-    [gameMatchesForSelectedDate]
   );
 
   const resultsForSelectedDate = useMemo(
@@ -388,7 +380,7 @@ export default function GamePage() {
               <div className="mx-auto w-full max-w-[450px]">
                 <MatchCard
                   ref={upcomingRef}
-                  matches={scheduledMatchesForSelectedDate}
+                  matches={gameMatchesForSelectedDate}
                   dateLabel={
                     selectedDate
                       ? `Partidos para el viernes ${formatDateSpanish(selectedDate)}`
