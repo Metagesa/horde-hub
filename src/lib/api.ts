@@ -93,9 +93,7 @@ async function requestMatches(gameId: string): Promise<ParsedMatch[]> {
   }
 
   const data = (await parseJsonResponse(res)) as RawMatch[];
-  return data
-    .map(parseMatch)
-    .filter((match) => match.playerA && match.date && match.time);
+  return data.map(parseMatch);
 }
 
 export async function fetchMatches(gameId?: string): Promise<ParsedMatch[]> {
@@ -144,9 +142,7 @@ export async function fetchAllMatches(
     return Object.fromEntries(
       uniqueGameIds.map((gameId) => [
         gameId,
-        (data[gameId] || [])
-          .map(parseMatch)
-          .filter((match) => match.playerA && match.date && match.time),
+        (data[gameId] || []).map(parseMatch),
       ])
     );
   } catch {

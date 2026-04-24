@@ -147,6 +147,100 @@ describe("match api", () => {
     ]);
   });
 
+  it("preserves normalized matches instead of filtering them in the fetch layer", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: 21,
+          date: "2026-04-24T00:00:00.000Z",
+          playerA: "Alice",
+          factionA: "Alchemists",
+          playerB: "Bob",
+          factionB: "Butchers",
+          time: "2026-04-24T19:30:00.000Z",
+        },
+        {
+          id: 22,
+          date: "2026-04-24T00:00:00.000Z",
+          playerA: "",
+          factionA: "",
+          playerB: "Bob",
+          factionB: "Butchers",
+          time: "2026-04-24T20:00:00.000Z",
+          scoreA: "12",
+          scoreB: "8",
+        },
+      ],
+    } as Response);
+
+    await expect(fetchMatches("warhammer-40k")).resolves.toEqual([
+      expect.objectContaining({
+        id: "21",
+        playerA: "Alice",
+        date: "2026-04-24",
+        time: "19:30",
+      }),
+      expect.objectContaining({
+        id: "22",
+        playerA: "",
+        date: "2026-04-24",
+        time: "20:00",
+        played: true,
+        status: "completed",
+      }),
+    ]);
+  });
+
+  it("keeps bulk-fetched matches for callers to filter by surface", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        "warhammer-40k": [
+          {
+            id: 31,
+            date: "2026-04-24T00:00:00.000Z",
+            playerA: "Alice",
+            factionA: "Alchemists",
+            playerB: "Bob",
+            factionB: "Butchers",
+            time: "2026-04-24T19:30:00.000Z",
+          },
+          {
+            id: 32,
+            date: "2026-04-24T00:00:00.000Z",
+            playerA: "",
+            factionA: "",
+            playerB: "Bob",
+            factionB: "Butchers",
+            time: "2026-04-24T20:00:00.000Z",
+            scoreA: "12",
+            scoreB: "8",
+          },
+        ],
+      }),
+    } as Response);
+
+    await expect(fetchAllMatches(["warhammer-40k"])).resolves.toEqual({
+      "warhammer-40k": [
+        expect.objectContaining({
+          id: "31",
+          playerA: "Alice",
+          date: "2026-04-24",
+          time: "19:30",
+        }),
+        expect.objectContaining({
+          id: "32",
+          playerA: "",
+          date: "2026-04-24",
+          time: "20:00",
+          played: true,
+          status: "completed",
+        }),
+      ],
+    });
+  });
+
   it("falls back to empty arrays per game when a cross-game fetch fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: false,
