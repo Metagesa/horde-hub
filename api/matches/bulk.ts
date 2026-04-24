@@ -1,6 +1,6 @@
-import { json } from "../../server/http";
-import { getDatabaseErrorStatus } from "../../server/database";
-import { listMatchesByGameIds } from "../../server/matchStore";
+import { json } from "../../server/http.js";
+import { getDatabaseErrorStatus } from "../../server/database.js";
+import { listMatchesByGameIds } from "../../server/matchStore.js";
 
 function getGameIds(query: Record<string, unknown>) {
   const raw = query.gameId ?? query.gameIds ?? [];

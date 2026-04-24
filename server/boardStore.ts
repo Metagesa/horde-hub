@@ -1,13 +1,13 @@
-import { TABLES, TABLE_TIME_SLOTS } from "../src/lib/localData";
-import { getBoardReservationAssignments } from "../src/lib/tableAvailability";
+import { TABLES, TABLE_TIME_SLOTS } from "../src/lib/localData.js";
+import { getBoardReservationAssignments } from "../src/lib/tableAvailability.js";
 import type {
   BoardAvailabilityState,
   BoardReservationSlotAssignment,
   GameTable,
   ParsedMatch,
 } from "../src/types";
-import { getSql, isDatabaseUnavailableError } from "./database";
-import { listActiveReservationMatchesByDate } from "./matchStore";
+import { getSql, isDatabaseUnavailableError } from "./database.js";
+import { listActiveReservationMatchesByDate } from "./matchStore.js";
 
 type BoardTableRow = {
   table_id: string;

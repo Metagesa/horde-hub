@@ -1,7 +1,7 @@
-import { verifyAdminCredential } from "../../server/adminAuth";
-import { getDatabaseErrorStatus } from "../../server/database";
-import { json, getBearerToken, requireJsonBody } from "../../server/http";
-import { createMatch, listMatches } from "../../server/matchStore";
+import { verifyAdminCredential } from "../../server/adminAuth.js";
+import { getDatabaseErrorStatus } from "../../server/database.js";
+import { json, getBearerToken, requireJsonBody } from "../../server/http.js";
+import { createMatch, listMatches } from "../../server/matchStore.js";
 
 export default async function handler(req: any, res: any) {
   if (req.method === "GET") {

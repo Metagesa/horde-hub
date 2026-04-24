@@ -1,5 +1,5 @@
-import { parseMatch, type RawMatch } from "../src/lib/matchNormalization";
-import { getSql, isDatabaseUnavailableError } from "./database";
+import { parseMatch, type RawMatch } from "../src/lib/matchNormalization.js";
+import { getSql, isDatabaseUnavailableError } from "./database.js";
 
 type MatchRow = {
   id: string;

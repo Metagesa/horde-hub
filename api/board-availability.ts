@@ -1,7 +1,7 @@
-import { GAME_CONFIGS } from "../src/lib/localData";
-import { getDatabaseErrorStatus } from "../server/database";
-import { getBoardAvailability } from "../server/boardStore";
-import { json } from "../server/http";
+import { GAME_CONFIGS } from "../src/lib/localData.js";
+import { getDatabaseErrorStatus } from "../server/database.js";
+import { getBoardAvailability } from "../server/boardStore.js";
+import { json } from "../server/http.js";
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "GET") {
