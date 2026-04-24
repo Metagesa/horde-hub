@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { deleteMatch, saveMatch } from "@/lib/api";
+import { ADMIN_SESSION_EXPIRED_EVENT, deleteMatch, saveMatch } from "@/lib/api";
 import {
   clearAdminSession,
   decodeGoogleCredential,
@@ -92,6 +92,23 @@ export default function AdminPage() {
       setSession(null);
     }
   }, [session]);
+
+  useEffect(() => {
+    const handleExpiredSession = () => {
+      clearAdminSession();
+      setSession(null);
+      toast({
+        title: "Sesion vencida",
+        description: "Vuelve a iniciar sesion con Google para continuar.",
+        variant: "destructive",
+      });
+    };
+
+    window.addEventListener(ADMIN_SESSION_EXPIRED_EVENT, handleExpiredSession);
+    return () => {
+      window.removeEventListener(ADMIN_SESSION_EXPIRED_EVENT, handleExpiredSession);
+    };
+  }, [toast]);
 
   useEffect(() => {
     if (!clientId || session) {

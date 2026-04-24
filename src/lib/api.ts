@@ -1,5 +1,5 @@
 import type { ParsedMatch } from "@/types";
-import { getAdminCredential } from "@/lib/adminAuth";
+import { clearAdminSession, getAdminCredential } from "@/lib/adminAuth";
 import {
   buildMatchPayload,
   parseMatch,
@@ -15,6 +15,7 @@ const READ_TIMEOUT_MS = 8_000;
 const WRITE_TIMEOUT_MS = 10_000;
 const HTML_RESPONSE_MESSAGE =
   "La API devolvio HTML en vez de JSON. Si estas en desarrollo, inicia el proyecto con Vercel Functions activas.";
+const ADMIN_SESSION_EXPIRED_EVENT = "admin-session-expired";
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -46,6 +47,11 @@ async function fetchWithTimeout(
 
 async function parseSuccessResponse(res: Response): Promise<boolean> {
   if (!res.ok) {
+    if (res.status === 401) {
+      clearAdminSession();
+      window.dispatchEvent(new CustomEvent(ADMIN_SESSION_EXPIRED_EVENT));
+    }
+
     return false;
   }
 
@@ -272,3 +278,4 @@ export async function deleteMatch(
 }
 
 export { parseMatch };
+export { ADMIN_SESSION_EXPIRED_EVENT };

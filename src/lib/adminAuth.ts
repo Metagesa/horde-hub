@@ -8,6 +8,13 @@ export interface AdminSession {
   credential: string;
 }
 
+interface GoogleCredentialPayload {
+  email?: unknown;
+  name?: unknown;
+  picture?: unknown;
+  exp?: unknown;
+}
+
 function decodeBase64Url(value: string): string {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
@@ -16,12 +23,7 @@ function decodeBase64Url(value: string): string {
 
 export function decodeGoogleCredential(credential: string): AdminSession | null {
   try {
-    const payload = credential.split(".")[1];
-    if (!payload) {
-      return null;
-    }
-
-    const data = JSON.parse(decodeBase64Url(payload));
+    const data = decodeGoogleCredentialPayload(credential);
     if (!data.email) {
       return null;
     }
@@ -35,6 +37,32 @@ export function decodeGoogleCredential(credential: string): AdminSession | null 
   } catch {
     return null;
   }
+}
+
+function decodeGoogleCredentialPayload(
+  credential: string
+): GoogleCredentialPayload | null {
+  try {
+    const payload = credential.split(".")[1];
+    if (!payload) {
+      return null;
+    }
+
+    return JSON.parse(decodeBase64Url(payload)) as GoogleCredentialPayload;
+  } catch {
+    return null;
+  }
+}
+
+export function isGoogleCredentialExpired(credential: string): boolean {
+  const payload = decodeGoogleCredentialPayload(credential);
+  const expiresAt = Number(payload?.exp);
+
+  if (!expiresAt) {
+    return false;
+  }
+
+  return expiresAt * 1000 <= Date.now() - 5_000;
 }
 
 export function getAdminEmails(): string[] {
@@ -135,6 +163,12 @@ export function getStoredAdminSession(): AdminSession | null {
 
     const parsed = JSON.parse(raw) as AdminSession;
     if (!parsed.email || !parsed.credential) {
+      clearAdminSession();
+      return null;
+    }
+
+    if (isGoogleCredentialExpired(parsed.credential)) {
+      clearAdminSession();
       return null;
     }
 

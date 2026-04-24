@@ -1,11 +1,12 @@
 import {
+  ADMIN_SESSION_EXPIRED_EVENT,
   fetchAllMatches,
   fetchMatches,
   fetchMatchesWithState,
   parseMatch,
   saveMatch,
 } from "@/lib/api";
-import { storeAdminSession } from "@/lib/adminAuth";
+import { getStoredAdminSession, storeAdminSession } from "@/lib/adminAuth";
 import { GAME_CONFIGS, TABLES, TABLE_TIME_SLOTS, getGameFactions } from "@/lib/localData";
 
 describe("local snapshot data", () => {
@@ -221,6 +222,63 @@ describe("match api", () => {
       status: "scheduled",
       played: false,
     });
+  });
+
+  it("drops expired stored admin sessions", () => {
+    const encodeBase64Url = (value: object) =>
+      btoa(JSON.stringify(value))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/g, "");
+
+    const credential = `${encodeBase64Url({ alg: "none", typ: "JWT" })}.${encodeBase64Url({
+      email: "admin@example.com",
+      exp: Math.floor(Date.now() / 1000) - 60,
+    })}.sig`;
+
+    storeAdminSession({
+      email: "admin@example.com",
+      name: "Admin",
+      credential,
+    });
+
+    expect(getStoredAdminSession()).toBeNull();
+    expect(localStorage.getItem("horda-admin-session")).toBeNull();
+  });
+
+  it("clears the admin session and emits an event when the API returns 401", async () => {
+    storeAdminSession({
+      email: "admin@example.com",
+      name: "Admin",
+      credential: "jwt-token",
+    });
+    const expiredListener = vi.fn();
+    window.addEventListener(ADMIN_SESSION_EXPIRED_EVENT, expiredListener);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ success: false }),
+    } as Response);
+
+    await expect(
+      saveMatch("guild-ball", {
+        date: "2026-04-24",
+        playerA: "ALICE",
+        factionA: "Alchemists",
+        playerB: "BOB",
+        factionB: "Butchers",
+        time: "19:30",
+        duration: "02:00",
+        tableId: "",
+        tableSize: "",
+        matchSize: "90x90",
+        reserveTable: false,
+      })
+    ).resolves.toBe(false);
+
+    expect(getStoredAdminSession()).toBeNull();
+    expect(expiredListener).toHaveBeenCalledTimes(1);
+    window.removeEventListener(ADMIN_SESSION_EXPIRED_EVENT, expiredListener);
   });
 
   it("keeps parseMatch available for direct utility use", () => {
