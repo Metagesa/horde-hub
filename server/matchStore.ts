@@ -5,7 +5,7 @@ type MatchRow = {
   id: string;
   legacy_id: string | null;
   game_id: string;
-  date: string;
+  date: string | Date;
   time: string;
   duration: string | null;
   player_a: string;
@@ -21,7 +21,7 @@ type MatchRow = {
   score_b: number | null;
   played: boolean;
   status: string;
-  created_at: string;
+  created_at: string | Date;
 };
 
 export type MatchWriteInput = {

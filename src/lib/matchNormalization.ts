@@ -2,7 +2,7 @@ import type { ParsedMatch } from "../types";
 
 export type RawMatch = {
   id: string | number;
-  date: string;
+  date: string | Date | null | undefined;
   playerA: string;
   factionA: string;
   playerB: string;
@@ -76,12 +76,43 @@ export function normalizeStatus(value: unknown, played: boolean): string {
   return "scheduled";
 }
 
-export function normalizeDate(date?: string): string {
+function formatDatePartsUtc(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function normalizeDate(date?: string | Date | null): string {
   if (!date) {
     return "";
   }
 
-  return date.includes("T") ? date.split("T")[0] : date;
+  if (date instanceof Date) {
+    return Number.isNaN(date.getTime()) ? "" : formatDatePartsUtc(date);
+  }
+
+  const normalized = String(date).trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  const isoDateMatch = normalized.match(/^(\d{4}-\d{2}-\d{2})(?:[T\s].*)?$/);
+  if (isoDateMatch) {
+    return isoDateMatch[1];
+  }
+
+  if (!/[\/-]|[a-z]/i.test(normalized)) {
+    return "";
+  }
+
+  const parsed = new Date(normalized);
+  if (!Number.isNaN(parsed.getTime())) {
+    return formatDatePartsUtc(parsed);
+  }
+
+  return "";
 }
 
 function padClockSegment(value: number): string {

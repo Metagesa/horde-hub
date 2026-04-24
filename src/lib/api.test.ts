@@ -117,6 +117,31 @@ describe("match api", () => {
     ]);
   });
 
+  it("parses remote matches when the date field is a Date object", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: 7,
+          date: new Date("2026-04-24T00:00:00.000Z"),
+          playerA: "Alice",
+          factionA: "Alchemists",
+          playerB: "Bob",
+          factionB: "Butchers",
+          time: "19:30:00",
+        },
+      ],
+    } as Response);
+
+    await expect(fetchMatches("guild-ball")).resolves.toEqual([
+      expect.objectContaining({
+        id: "7",
+        date: "2026-04-24",
+        time: "19:30",
+      }),
+    ]);
+  });
+
   it("falls back to empty arrays per game when a cross-game fetch fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: false,
@@ -215,6 +240,24 @@ describe("match api", () => {
       time: "19:00",
       played: false,
       status: "scheduled",
+    });
+  });
+
+  it("returns an empty date instead of throwing for unexpected date values", () => {
+    expect(
+      parseMatch({
+        id: "10",
+        date: 123 as unknown as Date,
+        playerA: "Alice",
+        factionA: "Alchemists",
+        playerB: "Bob",
+        factionB: "Butchers",
+        time: "19:00:00",
+      })
+    ).toMatchObject({
+      id: "10",
+      date: "",
+      time: "19:00",
     });
   });
 });
