@@ -3,6 +3,22 @@ import { getDatabaseErrorStatus } from "../../server/database.js";
 import { json, getBearerToken, requireJsonBody } from "../../server/http.js";
 import { createMatch, listMatches } from "../../server/matchStore.js";
 
+function getPublicCreateInput(body: Record<string, unknown>) {
+  return {
+    gameId: body.gameId,
+    date: body.date,
+    time: body.time,
+    duration: body.duration,
+    playerA: body.playerA,
+    factionA: body.factionA,
+    playerB: body.playerB,
+    factionB: body.factionB,
+    tableId: body.tableId,
+    tableSize: body.tableSize,
+    matchSize: body.matchSize,
+  };
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method === "GET") {
     const gameId = String(req.query.gameId || "").trim();
@@ -22,16 +38,12 @@ export default async function handler(req: any, res: any) {
   }
 
   if (req.method === "POST") {
-    const credential = getBearerToken(req);
-    const isAdmin = await verifyAdminCredential(credential);
-
-    if (!isAdmin) {
-      return json(res, 401, { success: false, message: "No autorizado" });
-    }
-
     try {
       const body = await requireJsonBody(req);
-      const match = await createMatch(body);
+      const credential = getBearerToken(req);
+      const isAdmin = await verifyAdminCredential(credential);
+      const input = isAdmin ? body : getPublicCreateInput(body);
+      const match = await createMatch(input);
       return json(res, 200, { success: true, match });
     } catch (error) {
       const message =

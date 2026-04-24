@@ -21,6 +21,7 @@ import MatchCard from "@/components/MatchCard";
 import { SiteLoading } from "@/components/SiteLoading";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { getStoredAdminSession } from "@/lib/adminAuth";
 import type { ParsedMatch } from "@/types";
 
 const RegistrationForm = lazy(async () => {
@@ -69,6 +70,8 @@ export default function GamePage() {
     useState<ParsedMatch | null>(null);
   const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
   const selectedDateIsPast = isPastDate(selectedDate);
+  const adminSession = getStoredAdminSession();
+  const canManageMatches = Boolean(adminSession);
   const needsBoardAvailability =
     tab === "registro" || tab === "mesas" || selectedEditMatch !== null;
   const {
@@ -397,10 +400,17 @@ export default function GamePage() {
                   logoUrl={config.logo}
                   backgroundUrl={config.backgroundImage}
                   factions={factions}
-                  onEdit={(match) => setSelectedEditMatch(match)}
-                  onResult={(match) => setSelectedResultMatch(match)}
-                  onDelete={(match) =>
-                    busyMatchId === match.id ? undefined : handleDelete(match)
+                  onEdit={canManageMatches ? (match) => setSelectedEditMatch(match) : undefined}
+                  onResult={
+                    canManageMatches
+                      ? (match) => setSelectedResultMatch(match)
+                      : undefined
+                  }
+                  onDelete={
+                    canManageMatches
+                      ? (match) =>
+                          busyMatchId === match.id ? undefined : handleDelete(match)
+                      : undefined
                   }
                 />
               </div>
@@ -489,10 +499,17 @@ export default function GamePage() {
                   logoUrl={config.logo}
                   backgroundUrl={config.backgroundImage}
                   factions={factions}
-                  onEdit={(match) => setSelectedEditMatch(match)}
-                  onResult={(match) => setSelectedResultMatch(match)}
-                  onDelete={(match) =>
-                    busyMatchId === match.id ? undefined : handleDelete(match)
+                  onEdit={canManageMatches ? (match) => setSelectedEditMatch(match) : undefined}
+                  onResult={
+                    canManageMatches
+                      ? (match) => setSelectedResultMatch(match)
+                      : undefined
+                  }
+                  onDelete={
+                    canManageMatches
+                      ? (match) =>
+                          busyMatchId === match.id ? undefined : handleDelete(match)
+                      : undefined
                   }
                 />
               </div>
